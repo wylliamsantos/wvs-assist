@@ -390,6 +390,10 @@ function connectMcp() {
           sessionId: msg.sessionId,
         };
         const ownerStep = activeRunWorkflowId ? stepByWorkflowId(activeRunWorkflowId) : null;
+        const kind = msg.questionKind ?? 'unknown';
+        const reason = msg.questionReason ? ` | motivo: ${msg.questionReason}` : '';
+        log(`[PERGUNTA][${String(kind).toUpperCase()}] ${pendingQuestion.prompt}${reason}`);
+
         questionBox.setLabel(` Pergunta ${ownerStep ? `${emojiForPersona(ownerStep.persona)} ${firstNameFromPersona(ownerStep.persona)}` : 'do Agente'} `);
         if (ownerStep) addConversation(agentLine(ownerStep.persona, pendingQuestion.prompt));
         questionPrompt.setContent(pendingQuestion.prompt);

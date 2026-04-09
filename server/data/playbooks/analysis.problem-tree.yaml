@@ -11,11 +11,13 @@ steps:
   - type: instruction
     text: "Comece entendendo o objetivo estratégico do produto e seus usuários prioritários."
   - type: question
-    prompt: Qual problema principal você quer resolver e para quem?
+    prompt: Me conta sobre a sua ideia e qual problema você está tentando resolver.
   - type: question
-    prompt: Quais sintomas ou sinais mostram que esse problema é crítico hoje?
+    prompt: Para quem é essa solução e como esse público resolve isso hoje?
   - type: question
-    prompt: Existem restrições ou métricas de sucesso (prazo, orçamento, metas de negócio) já definidas?
+    prompt: Se nada mudar nos próximos meses, qual impacto negativo isso gera?
+  - type: question
+    prompt: O que seria sucesso para você nessa primeira versão (MVP)?
   - type: instruction
     text: "Agrupe sintomas por causa potencial e detalhe impactos de cada ramo."
   - type: question

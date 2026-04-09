@@ -382,7 +382,8 @@ async function handleWorkflowRun(ws: ServerWebSocket<any>, payload: any) {
             workflowId,
             sessionId,
             questionId,
-            prompt: step.prompt
+            prompt: step.prompt,
+            questionKind: "fixed"
           })
         );
         const answer = await waitForAnswer(questionId, ws);
@@ -397,6 +398,15 @@ async function handleWorkflowRun(ws: ServerWebSocket<any>, payload: any) {
             answer
           })
         );
+
+        await maybeAskAdaptiveAfterAnswer(ws, {
+          runId,
+          workflowId,
+          sessionId,
+          playbook,
+          qnaContext,
+          suffix: `after:${index}`
+        });
         continue;
       }
 
@@ -477,6 +487,39 @@ async function handleWorkflowRun(ws: ServerWebSocket<any>, payload: any) {
   }
 }
 
+async function maybeAskAdaptiveAfterAnswer(
+  ws: ServerWebSocket<any>,
+  {
+    runId,
+    workflowId,
+    sessionId,
+    playbook,
+    qnaContext,
+    suffix
+  }: {
+    runId: string;
+    workflowId: string;
+    sessionId: string;
+    playbook: Playbook;
+    qnaContext: { prompt: string; answer: string }[];
+    suffix: string;
+  }
+) {
+  const followup = await generateFollowupQuestion(playbook, qnaContext);
+  if (!followup?.ask || !followup.question) return;
+
+  await askFollowupQuestion(ws, {
+    runId,
+    workflowId,
+    sessionId,
+    prompt: followup.question,
+    qnaContext,
+    suffix,
+    questionKind: "adaptive",
+    reason: followup.reason
+  });
+}
+
 async function runAdaptiveQuestions(
   ws: ServerWebSocket<any>,
   {
@@ -498,7 +541,8 @@ async function runAdaptiveQuestions(
       sessionId,
       prompt,
       qnaContext,
-      suffix: `fallback:${index}`
+      suffix: `fallback:${index}`,
+      questionKind: "adaptive-fallback"
     });
     if (!asked) return;
   }
@@ -512,7 +556,9 @@ async function runAdaptiveQuestions(
       sessionId,
       prompt: followup.question,
       qnaContext,
-      suffix: `adaptive:${index}`
+      suffix: `adaptive:${index}`,
+      questionKind: "adaptive",
+      reason: followup.reason
     });
     if (!asked || !followup.allowMore) break;
   }
@@ -526,7 +572,9 @@ async function askFollowupQuestion(
     sessionId,
     prompt,
     qnaContext,
-    suffix
+    suffix,
+    questionKind,
+    reason
   }: {
     runId: string;
     workflowId: string;
@@ -534,6 +582,8 @@ async function askFollowupQuestion(
     prompt: string;
     qnaContext: { prompt: string; answer: string }[];
     suffix: string;
+    questionKind: "adaptive" | "adaptive-fallback";
+    reason?: string;
   }
 ) {
   const questionId = `${runId}:${suffix}`;
@@ -544,7 +594,9 @@ async function askFollowupQuestion(
       workflowId,
       sessionId,
       questionId,
-      prompt
+      prompt,
+      questionKind,
+      questionReason: reason
     })
   );
   try {
@@ -570,13 +622,14 @@ async function askFollowupQuestion(
 async function generateFollowupQuestion(
   playbook: Playbook,
   qna: { prompt: string; answer: string }[]
-): Promise<{ ask: boolean; question?: string; allowMore?: boolean } | null> {
+): Promise<{ ask: boolean; question?: string; allowMore?: boolean; reason?: string } | null> {
   const persona = PERSONA_DETAILS[playbook.persona];
   const promptLines = [
     `Você é ${persona?.displayName ?? playbook.persona}, especialista em ${playbook.phase}.`,
     `Seu objetivo é identificar lacunas antes de finalizar o workflow ${playbook.id}.`,
-    'Analise as perguntas e respostas já obtidas e retorne JSON no formato {"ask": true/false, "question": "texto", "allowMore": true/false}.',
-    'Pergunte apenas se faltarem detalhes essenciais (metas, riscos, restrições, stakeholders, dependências).',
+    'Estilo da pergunta: humano, claro e acolhedor (tom conversa, sem jargão técnico).',
+    'Retorne JSON no formato {"ask": true/false, "question": "texto", "allowMore": true/false, "reason": "por que esta pergunta ajuda"}.',
+    'Pergunte apenas se faltarem detalhes essenciais (problema, público, impacto, restrições, metas).',
     'Se estiver satisfeito com o contexto atual, responda {"ask": false}.',
     '',
     'Histórico coletado:'
@@ -616,7 +669,8 @@ function parseFollowupResponse(raw: string) {
     return {
       ask: Boolean(parsed.ask),
       question: typeof parsed.question === "string" ? parsed.question.trim() : undefined,
-      allowMore: parsed.allowMore !== false
+      allowMore: parsed.allowMore !== false,
+      reason: typeof parsed.reason === "string" ? parsed.reason.trim() : undefined
     };
   } catch {
     // modelos locais podem devolver JSON imperfeito; tratar como sem follow-up
