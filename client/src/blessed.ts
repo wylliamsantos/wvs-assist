@@ -57,7 +57,11 @@ let expertCards: ExpertCard[] = [];
 let sessions: SessionRecord[] = [];
 let lines: string[] = ['⚙️ WVS Orbit pronto.'];
 
-const add = (line: string) => { lines.push(line); if (lines.length > 120) lines = lines.slice(-120); };
+const sanitize = (line: string) => line.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+const add = (line: string) => {
+  lines.push(sanitize(line));
+  if (lines.length > 120) lines = lines.slice(-120);
+};
 const setSys = (line: string) => { sys.setContent(`⚙ ${line}`); };
 
 function firstName(persona: string) { return persona.split('—')[0]?.trim() || persona; }
@@ -85,6 +89,21 @@ function renderJourney() {
   journey.setContent(`Progresso: ${bar}\n${GUIDED_FLOW.map((s) => s.label).join('  •  ')}`);
 }
 
+function wrapLine(line: string, width = 120) {
+  const out: string[] = [];
+  let rest = line;
+  while (rest.length > width) {
+    out.push(rest.slice(0, width));
+    rest = rest.slice(width);
+  }
+  out.push(rest);
+  return out;
+}
+
+function convoBlock(limit: number, width = 120) {
+  return lines.slice(-limit).flatMap((x) => [...wrapLine(x, width), '']);
+}
+
 function renderMain() {
   if (screenMode === 'home') {
     main.setLabel(' Sessão Inicial ');
@@ -110,7 +129,7 @@ function renderMain() {
       '',
       sel ? `${avatar(sel.personaName)} ${firstName(sel.personaName)}: ${sel.summary}` : '',
       '',
-      ...lines.slice(-10).flatMap((x) => [x, ''])
+      ...convoBlock(10)
     ].join('\n'));
     inputHint.setContent(processing ? 'Aguarde o agente concluir...' : '↑/↓ escolhe | Enter executa | h home');
     input.hide();
@@ -123,7 +142,7 @@ function renderMain() {
     step ? `${avatar(step.persona)} ${firstName(step.persona)} • ${step.label}` : '✅ Jornada concluída',
     processing ? 'Agente processando... aguarde' : 'Pressione Enter para avançar etapa',
     '',
-    ...lines.slice(-14).flatMap((x) => [x, ''])
+    ...convoBlock(14)
   ].join('\n'));
 
   if (pendingQuestionId) {
@@ -161,7 +180,20 @@ function sendRun(workflowId: string, mode: Mode) {
   if (processing) return setSys('já existe execução em andamento');
   processing = true;
   processingLabel = workflowId;
-  ws.send(JSON.stringify({ id: `run-${Date.now()}`, type: 'workflow.run', workflowId, sessionId: `ses-${Date.now()}`, runMode: mode, input: 'continuar' }));
+  const contextSnippet = lines.slice(-10).join(' | ');
+  const step = GUIDED_FLOW.find((s) => s.workflowId === workflowId);
+  const contextualInput = mode === 'guided'
+    ? `Contexto da jornada: ${contextSnippet}. Etapa atual: ${step?.label ?? workflowId}.`
+    : `Consulta especialista com contexto: ${contextSnippet}`;
+
+  ws.send(JSON.stringify({
+    id: `run-${Date.now()}`,
+    type: 'workflow.run',
+    workflowId,
+    sessionId: `ses-${Date.now()}`,
+    runMode: mode,
+    input: contextualInput
+  }));
   add(`⚙️ Execução iniciada: ${workflowId}`);
   renderAll();
 }
