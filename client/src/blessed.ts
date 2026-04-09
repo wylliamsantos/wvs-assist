@@ -23,6 +23,14 @@ type WorkflowSummary = {
   summary: string;
 };
 
+type ExpertCard = {
+  persona: string;
+  personaName: string;
+  phase: string;
+  workflowId: string;
+  summary: string;
+};
+
 const API_BASE = process.env.BMAD_API_URL || 'http://127.0.0.1:4000';
 const ACCESS_TOKEN = process.env.BMAD_ACCESS_TOKEN || 'demo-access-token';
 const PHASE_ORDER = ['analysis', 'planning', 'solutioning', 'implementation', 'testing', 'documentation'] as const;
@@ -43,6 +51,12 @@ const header = blessed.box({
   style: { bg: 'magenta', fg: 'black' },
   content: ' BMAD Orchestrator | [g] guided [e] expert [r] refresh [i] import expert->guided [enter] run [q] quit '
 });
+
+function renderHeader() {
+  const base = ' BMAD Orchestrator | [g] guided [e] expert [r] refresh [i] import expert->guided [enter] run [q] quit ';
+  const processing = isProcessing ? ` | PROCESSANDO: ${processingLabel}` : '';
+  header.setContent(base + processing);
+}
 
 const timeline = blessed.box({
   parent: screen,
@@ -99,9 +113,12 @@ const logs = blessed.log({
 
 let mode: Mode = 'guided';
 let workflows: WorkflowSummary[] = [];
+let expertCards: ExpertCard[] = [];
 let sessions: SessionRecord[] = [];
 let selectedIndex = 0;
 let ws: WebSocket | null = null;
+let isProcessing = false;
+let processingLabel = '';
 
 function log(msg: string) {
   logs.log(`[${new Date().toISOString()}] ${msg}`);
@@ -142,7 +159,7 @@ function phaseDoneCount() {
 }
 
 function pendingForSelectedWorkflow() {
-  const selected = workflows[selectedIndex];
+  const selected = mode === 'expert' ? expertCards[selectedIndex] : workflows[selectedIndex];
   if (!selected) return ['Selecione um workflow'];
   if (mode === 'expert') return ['Sem gate obrigatório (modo especialista).', 'Sugestão: importar output para sessão guided.'];
 
@@ -174,6 +191,25 @@ function renderTimeline() {
 }
 
 function renderWorkflows() {
+  if (mode === 'expert') {
+    if (expertCards.length === 0) {
+      workflowsPanel.setContent('{gray-fg}Sem especialistas disponíveis{/gray-fg}');
+      return;
+    }
+    const rows = expertCards.map((c, idx) => {
+      const selected = idx === selectedIndex;
+      const head = selected ? '{magenta-fg}┏━{/magenta-fg}' : '{gray-fg}┌─{/gray-fg}';
+      const tail = selected ? '{magenta-fg}┗━{/magenta-fg}' : '{gray-fg}└─{/gray-fg}';
+      return [
+        `${head} ${selected ? '{magenta-fg}CARD{/magenta-fg}' : '{gray-fg}card{/gray-fg}'} ${c.personaName}`,
+        `   {gray-fg}${c.phase}{/gray-fg}`,
+        `${tail} ${c.summary.slice(0, 56)}`
+      ].join('\n');
+    });
+    workflowsPanel.setContent(rows.join('\n\n'));
+    return;
+  }
+
   if (workflows.length === 0) {
     workflowsPanel.setContent('{gray-fg}Sem workflows carregados{/gray-fg}');
     return;
@@ -186,9 +222,9 @@ function renderWorkflows() {
 }
 
 function renderDetails() {
-  const selected = workflows[selectedIndex];
+  const selected = mode === 'expert' ? expertCards[selectedIndex] : workflows[selectedIndex];
   if (!selected) {
-    details.setContent('{gray-fg}Selecione um workflow{/gray-fg}');
+    details.setContent('{gray-fg}Selecione um item{/gray-fg}');
     return;
   }
   const pending = pendingForSelectedWorkflow();
@@ -196,14 +232,16 @@ function renderDetails() {
     .filter((s) => s.runMode === 'guided')
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
 
+  const title = mode === 'expert' ? selected.personaName : selected.id;
   const txt = [
-    `{bold}${selected.id}{/bold}`,
+    `{bold}${title}{/bold}`,
     '',
     `{gray-fg}Persona:{/gray-fg} ${selected.personaName}`,
     `{gray-fg}Fase:{/gray-fg} ${selected.phase}`,
     '',
     `{gray-fg}Modo de execução:{/gray-fg}`,
     mode === 'guided' ? 'Jornada completa (gate)' : 'Especialista (atalho)',
+    isProcessing ? '{yellow-fg}Agente processando... aguarde finalizar.{/yellow-fg}' : '{green-fg}Pronto para executar.{/green-fg}',
     '',
     '{gray-fg}Pendências p/ avançar:{/gray-fg}',
     ...pending.map((line) => `- ${line}`),
@@ -227,7 +265,24 @@ async function refreshData() {
     const sData = (await sRes.json()) as { sessions: SessionRecord[] };
     workflows = wData.workflows ?? [];
     sessions = (sData.sessions ?? []).map((s) => ({ ...s, runMode: s.runMode ?? 'guided', phase: s.phase ?? s.workflow.split('.')[0] }));
-    if (selectedIndex >= workflows.length) selectedIndex = Math.max(0, workflows.length - 1);
+
+    const byPersona = new Map<string, ExpertCard>();
+    for (const w of workflows) {
+      if (!byPersona.has(w.persona)) {
+        byPersona.set(w.persona, {
+          persona: w.persona,
+          personaName: w.personaName,
+          phase: w.phase,
+          workflowId: w.id,
+          summary: w.summary,
+        });
+      }
+    }
+    expertCards = Array.from(byPersona.values());
+
+    const size = mode === 'expert' ? expertCards.length : workflows.length;
+    if (selectedIndex >= size) selectedIndex = Math.max(0, size - 1);
+    renderHeader();
     renderTimeline();
     renderWorkflows();
     renderDetails();
@@ -247,37 +302,63 @@ function connectMcp() {
   ws.onmessage = (ev) => {
     try {
       const msg = JSON.parse(String(ev.data));
-      if (msg.type === 'workflow.run.started') log(`Run started: ${msg.workflowId} (${msg.runMode})`);
-      if (msg.type === 'workflow.run.error') log(`Run error: ${msg.error}`);
+      if (msg.type === 'workflow.run.started') {
+        isProcessing = true;
+        processingLabel = msg.workflowId ?? 'workflow';
+        log(`Run started: ${msg.workflowId} (${msg.runMode})`);
+      }
+      if (msg.type === 'workflow.run.error') {
+        isProcessing = false;
+        processingLabel = '';
+        log(`Run error: ${msg.error}`);
+      }
       if (msg.type === 'workflow.run.completed') {
+        isProcessing = false;
+        processingLabel = '';
         log(`Run completed: ${msg.workflowId}`);
         void refreshData();
       }
     } catch {
       log(`MCP msg: ${String(ev.data).slice(0, 120)}`);
     }
+    renderHeader();
+    renderDetails();
     screen.render();
   };
 }
 
 function runSelectedWorkflow() {
-  const selected = workflows[selectedIndex];
-  if (!selected || !ws || ws.readyState !== WebSocket.OPEN) {
-    log('Não foi possível iniciar: workflow ausente ou MCP offline');
+  if (isProcessing) {
+    log('Aguarde: já existe agente processando uma solicitação.');
     screen.render();
     return;
   }
+
+  const selectedWorkflowId = mode === 'expert'
+    ? expertCards[selectedIndex]?.workflowId
+    : workflows[selectedIndex]?.id;
+
+  if (!selectedWorkflowId || !ws || ws.readyState !== WebSocket.OPEN) {
+    log('Não foi possível iniciar: workflow/agente ausente ou MCP offline');
+    screen.render();
+    return;
+  }
+
   const runId = `run-${Date.now()}`;
   const sessionId = `ses-${Date.now()}`;
   ws.send(JSON.stringify({
     id: runId,
     type: 'workflow.run',
-    workflowId: selected.id,
+    workflowId: selectedWorkflowId,
     sessionId,
     runMode: mode,
     input: `Execução via NeoBlessed em modo ${mode}`
   }));
-  log(`Run enviado: ${selected.id} [${mode}]`);
+  isProcessing = true;
+  processingLabel = selectedWorkflowId;
+  renderHeader();
+  renderDetails();
+  log(`Run enviado: ${selectedWorkflowId} [${mode}]`);
   screen.render();
 }
 
@@ -324,26 +405,49 @@ async function importLatestExpertIntoGuided() {
 }
 
 screen.key(['q', 'C-c'], () => process.exit(0));
-screen.key(['g'], () => { mode = 'guided'; renderTimeline(); renderDetails(); log('Modo guided'); screen.render(); });
-screen.key(['e'], () => { mode = 'expert'; renderTimeline(); renderDetails(); log('Modo expert'); screen.render(); });
+screen.key(['g'], () => {
+  if (isProcessing) return log('Aguarde finalizar o processamento atual.');
+  mode = 'guided';
+  selectedIndex = 0;
+  renderTimeline();
+  renderWorkflows();
+  renderDetails();
+  log('Modo guided');
+  screen.render();
+});
+screen.key(['e'], () => {
+  if (isProcessing) return log('Aguarde finalizar o processamento atual.');
+  mode = 'expert';
+  selectedIndex = 0;
+  renderTimeline();
+  renderWorkflows();
+  renderDetails();
+  log('Modo expert');
+  screen.render();
+});
 screen.key(['r'], () => { void refreshData(); });
-screen.key(['i'], () => { void importLatestExpertIntoGuided(); });
+screen.key(['i'], () => { if (isProcessing) return log('Aguarde finalizar o processamento atual.'); void importLatestExpertIntoGuided(); });
 screen.key(['up', 'k'], () => {
-  if (workflows.length === 0) return;
-  selectedIndex = selectedIndex <= 0 ? workflows.length - 1 : selectedIndex - 1;
+  if (isProcessing) return log('Processando... navegação bloqueada até concluir.');
+  const size = mode === 'expert' ? expertCards.length : workflows.length;
+  if (size === 0) return;
+  selectedIndex = selectedIndex <= 0 ? size - 1 : selectedIndex - 1;
   renderWorkflows();
   renderDetails();
   screen.render();
 });
 screen.key(['down', 'j'], () => {
-  if (workflows.length === 0) return;
-  selectedIndex = (selectedIndex + 1) % workflows.length;
+  if (isProcessing) return log('Processando... navegação bloqueada até concluir.');
+  const size = mode === 'expert' ? expertCards.length : workflows.length;
+  if (size === 0) return;
+  selectedIndex = (selectedIndex + 1) % size;
   renderWorkflows();
   renderDetails();
   screen.render();
 });
 screen.key(['enter'], () => runSelectedWorkflow());
 
+renderHeader();
 connectMcp();
 await refreshData();
 log('NeoBlessed UI pronta');
