@@ -608,7 +608,8 @@ async function generateFollowupQuestion(
 }
 
 function parseFollowupResponse(raw: string) {
-  const match = raw.match(/\{[\s\S]*\}/);
+  const cleaned = raw.replace(/```json|```/gi, '').trim();
+  const match = cleaned.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
     const parsed = JSON.parse(match[0]);
@@ -617,8 +618,8 @@ function parseFollowupResponse(raw: string) {
       question: typeof parsed.question === "string" ? parsed.question.trim() : undefined,
       allowMore: parsed.allowMore !== false
     };
-  } catch (err) {
-    console.warn("invalid_followup_json", err);
+  } catch {
+    // modelos locais podem devolver JSON imperfeito; tratar como sem follow-up
     return null;
   }
 }
@@ -841,19 +842,27 @@ function writeArtifacts(
   });
 
   for (const artifact of playbook.outputs) {
-    const targetPath = path.join(baseDir, artifact.path);
+    const normalizedPath = normalizeArtifactOutputPath(artifact.path);
+    const targetPath = path.join(baseDir, normalizedPath);
     mkdirSync(path.dirname(targetPath), { recursive: true });
-    const content = composeArtifactContent(artifact, playbook, output, runMode);
+    const content = composeArtifactContent({ ...artifact, path: normalizedPath }, playbook, output, runMode);
     writeFileSync(targetPath, content, "utf-8");
     artifacts.push({
       path: path.relative(ARTIFACTS_DIR, targetPath),
       description: artifact.description,
       preview: buildPreview(content)
     });
-    writeWorkspaceArtifact(artifact.path, content);
+    writeWorkspaceArtifact(normalizedPath, content);
   }
 
   return artifacts;
+}
+
+function normalizeArtifactOutputPath(outputPath: string) {
+  const trimmed = outputPath.trim();
+  if (!trimmed) return 'docs/output.md';
+  if (trimmed.endsWith('/')) return `${trimmed}README.md`;
+  return trimmed;
 }
 
 function writeWorkspaceArtifact(relativePath: string, content: string) {
