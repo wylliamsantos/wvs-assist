@@ -33,4 +33,30 @@
 9. **Pilotos Internos**
    - Onboarding de squads, coleta de feedback, ajustes.
 
+## Fase 4 — Orquestração Híbrida (Semanas 7-8)
+10. **Dual Mode: Guided + Expert Jump-in** 🆕
+   - Introduzir `runMode` por sessão (`guided` | `expert`).
+   - `guided`: fluxo ponta a ponta com travas por fase.
+   - `expert`: acesso direto por especialidade (ex.: arquitetura, segurança, QA avançado) sem quebrar a jornada principal.
+11. **Gates e Pré-requisitos por Fase** 🆕
+   - Definir máquina de estados do workflow com transições válidas.
+   - Validar critérios mínimos por fase (inputs obrigatórios, artefatos, checklist de aprovação).
+   - Bloquear avanço quando gate não passar e explicar pendências em linguagem objetiva.
+12. **Importação de Conselhos Isolados para Trilha Completa** 🆕
+   - Permitir que resultados de sessões `expert` sejam anexados como evidência na trilha `guided`.
+   - Registrar origem, assumptions e nível de confiança do output isolado.
+   - Evitar retrabalho e preservar rastreabilidade entre sessões.
+
+## Fase 5 — Governança de Skills e Qualidade Operacional (Semanas 9-10)
+13. **Contrato de Skill/Playbook Versionado** 🆕
+   - Schema versionado para playbooks (`inputs`, `outputs`, `checks`, `handoff`, `required_artifacts`).
+   - Linter/validador de YAML antes da execução.
+14. **Handoff Auditável entre Agentes** 🆕
+   - Contexto estruturado no handoff (decisões, riscos, pendências, dono).
+   - Histórico de decisão por etapa para auditoria e revisão posterior.
+15. **UX de Orquestração no TUI** 🆕
+   - Home com duas entradas claras: “Jornada Completa” e “Consultar Especialista”.
+   - Painel de progresso com “o que falta para avançar” por gate.
+   - Mensagens consistentes para sucesso/falha de validações.
+
 > Dica: iniciar pela TUI (item 1) garante visibilidade rápida e permite testar os fluxos mesmo com backend mockado.

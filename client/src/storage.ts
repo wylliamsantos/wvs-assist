@@ -12,11 +12,15 @@ export type StoredTokens = {
   expiresAt: number;
 };
 
+export type RunMode = "guided" | "expert";
+
 export type SessionRecord = {
   id: string;
   agentId: string;
   agentName: string;
   workflow: string;
+  phase: string;
+  runMode: RunMode;
   status: "backlog" | "drafted" | "ready" | "in-progress" | "review" | "done" | "error";
   startedAt: string;
   updatedAt: string;

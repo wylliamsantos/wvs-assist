@@ -32,7 +32,7 @@ Replicar a experiência do `nt-beat` com personas e workflows inspirados no mét
    - Projetar API para agentes/workflows/skills.
    - Publicar endpoint MCP que fala o mesmo protocolo do cliente.
    - Implementar autenticação corporativa e gestão de tokens.
-   - Conectar LLMs locais (ex.: Ollama com Qwen) via `OLLAMA_URL`/`OLLAMA_MODEL` para executar workflows em modo privado.
+   - Conectar LLMs em modo híbrido (Ollama local + Codex/OpenAI compatível) com fallback configurável.
 3. **Modelagem BMAD**
    - Mapear etapas BMAD -> personas -> workflows.
    - Desenhar prompts/playbooks e templates de saída.

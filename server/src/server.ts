@@ -5,8 +5,15 @@ import { fileURLToPath } from "node:url";
 import type { ServerWebSocket } from "bun";
 
 const PORT = Number(process.env.PORT || 4000);
+const AI_PROVIDER = (process.env.AI_PROVIDER || "ollama") as "ollama" | "codex";
+const AI_FALLBACK_PROVIDER = (process.env.AI_FALLBACK_PROVIDER || "") as "" | "ollama" | "codex";
+
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://127.0.0.1:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2:3b";
+
+const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 const TOKENS = {
   accessToken: "demo-access-token",
@@ -54,12 +61,16 @@ type WorkflowSummary = {
 type ArtifactRecord = { path: string; description: string; preview?: string };
 
 type SessionStatus = 'backlog' | 'drafted' | 'ready' | 'in-progress' | 'review' | 'done' | 'error';
+type RunMode = 'guided' | 'expert';
 type SessionRecord = {
   id: string;
   agentId: string;
   agentName: string;
   workflow: string;
+  phase: string;
+  runMode: RunMode;
   status: SessionStatus;
+  importedFrom?: string[];
   startedAt: string;
   updatedAt: string;
 };
@@ -132,6 +143,8 @@ const workflowIndex = buildWorkflowIndex(playbooks);
 const sessionsStore = loadSessionsStore();
 const questionWaiters = new Map<string, QuestionWaiter>();
 
+const PHASE_ORDER = ['analysis', 'planning', 'solutioning', 'implementation', 'testing', 'documentation'] as const;
+
 const FALLBACK_FOLLOWUPS: Record<string, string[]> = {
   'analysis.problem-tree': [
     'Quais stakeholders ou equipes são mais impactados hoje?',
@@ -146,7 +159,7 @@ const FALLBACK_FOLLOWUPS: Record<string, string[]> = {
 
 const server = Bun.serve({
   port: PORT,
-  fetch(req, server) {
+  async fetch(req, server) {
     const url = new URL(req.url);
 
     if (url.pathname === "/auth/device" && req.method === "POST") {
@@ -168,6 +181,18 @@ const server = Bun.serve({
       return Response.json({ sessions: listSessions() });
     }
 
+    if (url.pathname === "/sessions/import-expert" && req.method === "POST") {
+      try {
+        const body = (await req.json()) as { sourceSessionId?: string; targetSessionId?: string };
+        const result = importExpertEvidence(body.sourceSessionId ?? "", body.targetSessionId ?? "");
+        return Response.json(result);
+      } catch (err) {
+        return Response.json(
+          { ok: false, error: err instanceof Error ? err.message : String(err) },
+          { status: 400 }
+        );
+      }
+    }
 
     if (url.pathname.startsWith("/workflows/") && req.method === "GET") {
       const id = decodeURIComponent(url.pathname.replace("/workflows/", ""));
@@ -252,6 +277,22 @@ const server = Bun.serve({
           return;
         }
 
+        if (payload.type === "workflow.import_expert") {
+          try {
+            const result = importExpertEvidence(payload.sourceSessionId ?? "", payload.targetSessionId ?? "");
+            ws.send(JSON.stringify({ id: payload.id, type: "workflow.import_expert.ok", payload: result }));
+          } catch (err) {
+            ws.send(
+              JSON.stringify({
+                id: payload.id,
+                type: "workflow.import_expert.error",
+                error: err instanceof Error ? err.message : String(err)
+              })
+            );
+          }
+          return;
+        }
+
         if (payload.type === "workflow.answer" && payload.questionId) {
           const waiter = questionWaiters.get(payload.questionId);
           if (!waiter) {
@@ -309,8 +350,24 @@ async function handleWorkflowRun(ws: ServerWebSocket<any>, payload: any) {
 
   const runId = payload.id;
   const sessionId = payload.sessionId ?? runId;
-  recordSessionStart(sessionId, playbook);
-  ws.send(JSON.stringify({ id: runId, type: "workflow.run.started", workflowId }));
+  const runMode: RunMode = payload?.runMode === 'expert' ? 'expert' : 'guided';
+  const gateCheck = validatePhaseGate(playbook.phase, runMode);
+  if (!gateCheck.ok) {
+    ws.send(
+      JSON.stringify({
+        id: runId,
+        type: "workflow.run.error",
+        workflowId,
+        sessionId,
+        error: gateCheck.reason,
+        code: "phase_gate_failed"
+      })
+    );
+    return;
+  }
+
+  recordSessionStart(sessionId, playbook, runMode);
+  ws.send(JSON.stringify({ id: runId, type: "workflow.run.started", workflowId, sessionId, runMode }));
 
   const qnaContext: { prompt: string; answer: string }[] = [];
 
@@ -367,7 +424,7 @@ async function handleWorkflowRun(ws: ServerWebSocket<any>, payload: any) {
     ws.send(JSON.stringify({ id: runId, type: "workflow.run.pending", workflowId, sessionId, stage: "llm" }));
     const llmOutput = await runWorkflowLLM(playbook, payload?.input, qnaContext);
     const normalizedOutput = llmOutput?.trim() ?? "";
-    const artifacts = writeArtifacts(sessionId, playbook, normalizedOutput, qnaContext);
+    const artifacts = writeArtifacts(sessionId, playbook, normalizedOutput, qnaContext, runMode);
     const primaryArtifact = artifacts.find((a) => a.description !== "Resumo do workflow") ?? artifacts[0];
     const displayOutput = buildWorkflowBrief(playbook, normalizedOutput, primaryArtifact);
     if (displayOutput.length > OUTPUT_CHUNK_SIZE) {
@@ -536,15 +593,11 @@ async function generateFollowupQuestion(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 1000 * 60);
   try {
-    const res = await fetch(`${OLLAMA_URL}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: OLLAMA_MODEL, prompt: promptLines.join("\n"), stream: false }),
+    const response = await generateText(promptLines.join("\n"), {
+      timeoutMs: 1000 * 60,
       signal: controller.signal
     });
-    if (!res.ok) throw new Error(`ollama_followup_${res.status}`);
-    const data = (await res.json()) as { response?: string };
-    return parseFollowupResponse(data.response ?? "");
+    return parseFollowupResponse(response);
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") return null;
     console.warn("followup_question_error", err);
@@ -586,21 +639,79 @@ async function runWorkflowLLM(playbook: Playbook, input?: string, qna?: { prompt
   const timeout = setTimeout(() => controller.abort(), 1000 * 60 * 2);
 
   try {
-    const res = await fetch(`${OLLAMA_URL}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false }),
+    return await generateText(prompt, {
+      timeoutMs: 1000 * 60 * 2,
       signal: controller.signal
     });
-    if (!res.ok) throw new Error(`ollama_${res.status}`);
-    const data = (await res.json()) as { response?: string };
-    return data.response ?? "";
   } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") throw new Error("ollama_timeout");
+    if (err instanceof Error && err.name === "AbortError") throw new Error("llm_timeout");
     throw err;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function generateText(prompt: string, options?: { timeoutMs?: number; signal?: AbortSignal }) {
+  const primary = AI_PROVIDER;
+  const fallback = AI_FALLBACK_PROVIDER && AI_FALLBACK_PROVIDER !== primary ? AI_FALLBACK_PROVIDER : null;
+
+  try {
+    return await runProviderGenerate(primary, prompt, options);
+  } catch (err) {
+    if (!fallback) throw err;
+    console.warn(`provider '${primary}' failed, trying fallback '${fallback}'`, err);
+    return await runProviderGenerate(fallback, prompt, options);
+  }
+}
+
+async function runProviderGenerate(
+  provider: "ollama" | "codex",
+  prompt: string,
+  options?: { timeoutMs?: number; signal?: AbortSignal }
+) {
+  if (provider === "codex") {
+    return await generateWithCodex(prompt, options);
+  }
+  return await generateWithOllama(prompt, options);
+}
+
+async function generateWithOllama(prompt: string, options?: { timeoutMs?: number; signal?: AbortSignal }) {
+  const res = await fetch(`${OLLAMA_URL}/api/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false }),
+    signal: options?.signal
+  });
+  if (!res.ok) throw new Error(`ollama_${res.status}`);
+  const data = (await res.json()) as { response?: string };
+  return data.response ?? "";
+}
+
+async function generateWithCodex(prompt: string, options?: { timeoutMs?: number; signal?: AbortSignal }) {
+  if (!OPENAI_API_KEY) {
+    throw new Error("codex_missing_api_key");
+  }
+  const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2
+    }),
+    signal: options?.signal
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`codex_${res.status}:${body.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  return data.choices?.[0]?.message?.content ?? "";
 }
 
 function loadPlaybooks(dir: string): Playbook[] {
@@ -706,7 +817,13 @@ function chunkText(text: string, size: number) {
   return chunks.length > 0 ? chunks : [text];
 }
 
-function writeArtifacts(sessionId: string, playbook: Playbook, output: string, qna?: { prompt: string; answer: string }[]) {
+function writeArtifacts(
+  sessionId: string,
+  playbook: Playbook,
+  output: string,
+  qna?: { prompt: string; answer: string }[],
+  runMode: RunMode = 'guided'
+) {
   const baseDir = path.join(ARTIFACTS_DIR, sessionId);
   mkdirSync(baseDir, { recursive: true });
   const artifacts: ArtifactRecord[] = [];
@@ -726,7 +843,7 @@ function writeArtifacts(sessionId: string, playbook: Playbook, output: string, q
   for (const artifact of playbook.outputs) {
     const targetPath = path.join(baseDir, artifact.path);
     mkdirSync(path.dirname(targetPath), { recursive: true });
-    const content = composeArtifactContent(artifact, playbook, output);
+    const content = composeArtifactContent(artifact, playbook, output, runMode);
     writeFileSync(targetPath, content, "utf-8");
     artifacts.push({
       path: path.relative(ARTIFACTS_DIR, targetPath),
@@ -762,75 +879,39 @@ function buildPreview(content: string, max = 280) {
   return `${flat.slice(0, max - 1)}…`;
 }
 
-function composeArtifactContent(artifact: { path: string; description: string }, playbook: Playbook, output: string) {
+function composeArtifactContent(
+  artifact: { path: string; description: string },
+  playbook: Playbook,
+  output: string,
+  runMode: RunMode
+) {
   const nextSteps = '- Revisar com o time responsável e coletar comentários.\n' +
     '- Validar se os itens de "Inputs esperados" estão atualizados antes do próximo workflow.';
-  return `# ${artifact.description}\n\nGerado automaticamente pelo workflow ${playbook.id}.\n\n## Resumo do Resultado\n${output || '(sem texto do LLM)'}\n\n## Próximos Passos\n${nextSteps}`;
+
+  const expertBlock = runMode === 'expert'
+    ? `\n\n## Contexto de Consulta Especializada\n- Modo: expert (atalho)\n- Assumptions: o workflow pode ter sido executado sem todos os artefatos das fases anteriores.\n- Nível de confiança: médio (depende da completude do contexto informado).\n- Recomendação: importar este output para a jornada guided e validar nos gates oficiais.`
+    : '';
+
+  return `# ${artifact.description}\n\nGerado automaticamente pelo workflow ${playbook.id}.\n\n## Resumo do Resultado\n${output || '(sem texto do LLM)'}${expertBlock}\n\n## Próximos Passos\n${nextSteps}`;
 }
 
 function loadSessionsStore(): SessionRecord[] {
   try {
     const raw = readFileSync(SESSIONS_FILE, "utf-8");
-    const parsed = JSON.parse(raw) as SessionRecord[];
-    if (Array.isArray(parsed)) return parsed;
-  } catch (err) {
-    // ignore
-  }
-  return [];
-}
-
-function persistSessions() {
-  mkdirSync(path.dirname(SESSIONS_FILE), { recursive: true });
-  writeFileSync(SESSIONS_FILE, JSON.stringify(sessionsStore, null, 2), "utf-8");
-}
-
-function listSessions() {
-  return [...sessionsStore].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
-}
-
-function recordSessionStart(sessionId: string, playbook: Playbook) {
-  const now = new Date().toISOString();
-  const meta = PERSONA_DETAILS[playbook.persona];
-  const index = sessionsStore.findIndex((session) => session.id === sessionId);
-  if (index >= 0) {
-    const current = sessionsStore[index];
-    sessionsStore[index] = {
-      ...current,
-      status: "in-progress",
-      updatedAt: now
-    };
-  } else {
-    sessionsStore.push({
-      id: sessionId,
-      agentId: playbook.persona,
-      agentName: meta?.displayName ?? playbook.persona,
-      workflow: playbook.id,
-      status: "in-progress",
-      startedAt: now,
-      updatedAt: now
-    });
-  }
-  persistSessions();
-}
-
-function updateSessionStatusRecord(sessionId: string, status: SessionStatus) {
-  const index = sessionsStore.findIndex((session) => session.id === sessionId);
-  if (index === -1) return;
-  sessionsStore[index] = {
-    ...sessionsStore[index],
-    status,
-    updatedAt: new Date().toISOString()
-  };
-  persistSessions();
-}
-
-function loadSessionsStore(): SessionRecord[] {
-  try {
-    const raw = readFileSync(SESSIONS_FILE, "utf-8");
-    const parsed = JSON.parse(raw) as SessionRecord[];
-    if (Array.isArray(parsed)) return parsed;
+    const parsed = JSON.parse(raw) as Partial<SessionRecord>[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((session) => ({
+      id: String(session.id ?? ""),
+      agentId: String(session.agentId ?? ""),
+      agentName: String(session.agentName ?? ""),
+      workflow: String(session.workflow ?? ""),
+      phase: String(session.phase ?? inferPhaseFromWorkflow(String(session.workflow ?? "analysis.problem-tree"))),
+      runMode: session.runMode === 'expert' ? 'expert' : 'guided',
+      status: (session.status as SessionStatus) ?? 'drafted',
+      importedFrom: Array.isArray(session.importedFrom) ? session.importedFrom.map(String) : [],
+      startedAt: String(session.startedAt ?? new Date().toISOString()),
+      updatedAt: String(session.updatedAt ?? new Date().toISOString())
+    }));
   } catch (err) {
     // ignore missing/invalid file
   }
@@ -846,18 +927,70 @@ function listSessions() {
   return [...sessionsStore].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
-function recordSessionStart(sessionId: string, playbook: Playbook) {
+function inferPhaseFromWorkflow(workflow: string): string {
+  const prefix = workflow.split('.')[0];
+  if (PHASE_ORDER.includes(prefix as (typeof PHASE_ORDER)[number])) return prefix;
+  return 'analysis';
+}
+
+function validatePhaseGate(phase: string, runMode: RunMode): { ok: boolean; reason?: string } {
+  if (runMode === 'expert') return { ok: true };
+  const currentIndex = PHASE_ORDER.indexOf(phase as (typeof PHASE_ORDER)[number]);
+  if (currentIndex <= 0) return { ok: true };
+
+  const previousPhase = PHASE_ORDER[currentIndex - 1];
+  const previousDone = sessionsStore.some((session) => session.phase === previousPhase && session.status === 'done');
+  if (previousDone) return { ok: true };
+
+  return {
+    ok: false,
+    reason: `Gate de fase não atendido: conclua ao menos um workflow da fase '${previousPhase}' antes de iniciar '${phase}' em modo guided.`
+  };
+}
+
+function importExpertEvidence(sourceSessionId: string, targetSessionId: string) {
+  const source = sessionsStore.find((session) => session.id === sourceSessionId);
+  const target = sessionsStore.find((session) => session.id === targetSessionId);
+
+  if (!source) throw new Error('source_session_not_found');
+  if (!target) throw new Error('target_session_not_found');
+  if (source.runMode !== 'expert') throw new Error('source_must_be_expert');
+  if (target.runMode !== 'guided') throw new Error('target_must_be_guided');
+
+  const imported = new Set(target.importedFrom ?? []);
+  imported.add(source.id);
+  target.importedFrom = Array.from(imported);
+  target.updatedAt = new Date().toISOString();
+  persistSessions();
+
+  return {
+    ok: true,
+    sourceSessionId: source.id,
+    targetSessionId: target.id,
+    importedFrom: target.importedFrom
+  };
+}
+
+function recordSessionStart(sessionId: string, playbook: Playbook, runMode: RunMode) {
   const now = new Date().toISOString();
   const meta = PERSONA_DETAILS[playbook.persona];
-  const index = sessionsStore.findIndex(session => session.id === sessionId);
+  const index = sessionsStore.findIndex((session) => session.id === sessionId);
   if (index >= 0) {
-    sessionsStore[index] = {...sessionsStore[index], status: 'in-progress', updatedAt: now};
+    sessionsStore[index] = {
+      ...sessionsStore[index],
+      status: 'in-progress',
+      phase: playbook.phase,
+      runMode,
+      updatedAt: now
+    };
   } else {
     sessionsStore.push({
       id: sessionId,
       agentId: playbook.persona,
       agentName: meta?.displayName ?? playbook.persona,
       workflow: playbook.id,
+      phase: playbook.phase,
+      runMode,
       status: 'in-progress',
       startedAt: now,
       updatedAt: now,
@@ -867,9 +1000,9 @@ function recordSessionStart(sessionId: string, playbook: Playbook) {
 }
 
 function updateSessionStatusRecord(sessionId: string, status: SessionStatus) {
-  const index = sessionsStore.findIndex(session => session.id === sessionId);
+  const index = sessionsStore.findIndex((session) => session.id === sessionId);
   if (index === -1) return;
-  sessionsStore[index] = {...sessionsStore[index], status, updatedAt: new Date().toISOString()};
+  sessionsStore[index] = { ...sessionsStore[index], status, updatedAt: new Date().toISOString() };
   persistSessions();
 }
 
