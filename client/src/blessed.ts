@@ -163,6 +163,9 @@ let expertSelected = 0;
 let isProcessing = false;
 let processingLabel = '';
 let pendingQuestion: PendingQuestion | null = null;
+let guidedNarrative = 'Escolha Jornada Guiada para começar com a Mary no discovery.';
+let activeRunMode: Mode | null = null;
+let activeRunWorkflowId: string | null = null;
 
 function log(msg: string) {
   logs.log(`[${new Date().toISOString()}] ${msg}`);
@@ -198,6 +201,31 @@ function nextGuidedStep() {
     if (!completed) return step;
   }
   return null;
+}
+
+function stepByWorkflowId(workflowId: string) {
+  return GUIDED_FLOW.find((s) => s.workflowId === workflowId) ?? null;
+}
+
+function nextStepAfterWorkflow(workflowId: string) {
+  const idx = GUIDED_FLOW.findIndex((s) => s.workflowId === workflowId);
+  if (idx < 0 || idx + 1 >= GUIDED_FLOW.length) return null;
+  return GUIDED_FLOW[idx + 1];
+}
+
+function setGuidedIntro(step = GUIDED_FLOW[0]) {
+  guidedNarrative = `Olá! Eu sou ${step.persona}. Vou te guiar na etapa \"${step.label}\" e transformar sua ideia em decisões claras.`;
+}
+
+function setGuidedHandoff(completedWorkflowId: string) {
+  const current = stepByWorkflowId(completedWorkflowId);
+  const next = nextStepAfterWorkflow(completedWorkflowId);
+  if (!current) return;
+  if (!next) {
+    guidedNarrative = `Ótimo trabalho. Eu, ${current.persona}, finalizei a última etapa. Jornada concluída com sucesso.`;
+    return;
+  }
+  guidedNarrative = `Resumo: ${current.persona} concluiu \"${current.label}\". Agora vou passar para ${next.persona}, que assume \"${next.label}\".`;
 }
 
 function renderHome() {
@@ -275,8 +303,11 @@ function renderGuided() {
   ].join('\n'));
 
   rightPanel.setContent([
-    '{bold}Como funciona{/bold}',
+    '{bold}Condução Humana{/bold}',
     '',
+    guidedNarrative,
+    '',
+    '{bold}Como funciona{/bold}',
     '1) Inicia a etapa atual',
     '2) Responde perguntas do agente (popup)',
     '3) Finaliza e libera próxima etapa',
@@ -355,6 +386,18 @@ function connectMcp() {
       if (msg.type === 'workflow.run.started') {
         isProcessing = true;
         processingLabel = msg.workflowId ?? 'workflow';
+        if (msg.runMode === 'guided') {
+          const step = stepByWorkflowId(msg.workflowId ?? '');
+          if (step) {
+            guidedNarrative = `Oi! Eu sou ${step.persona}. Vou conduzir você em \"${step.label}\". Vamos nessa.`;
+          }
+        }
+        if (msg.runMode === 'expert') {
+          const card = expertCards.find((c) => c.workflowId === msg.workflowId);
+          if (card) {
+            log(`${card.personaName}: "Oi, vou assumir essa análise e te retorno com recomendação objetiva."`);
+          }
+        }
         log(`Run started: ${msg.workflowId}`);
       }
       if (msg.type === 'workflow.question') {
@@ -363,6 +406,8 @@ function connectMcp() {
           prompt: msg.prompt ?? 'Responda para continuar',
           sessionId: msg.sessionId,
         };
+        const ownerStep = activeRunWorkflowId ? stepByWorkflowId(activeRunWorkflowId) : null;
+        questionBox.setLabel(` Pergunta do Agente ${ownerStep ? `— ${ownerStep.persona}` : ''} `);
         questionPrompt.setContent(pendingQuestion.prompt);
         questionInput.setValue('');
         questionBox.show();
@@ -372,11 +417,18 @@ function connectMcp() {
       if (msg.type === 'workflow.run.error') {
         isProcessing = false;
         processingLabel = '';
+        activeRunMode = null;
+        activeRunWorkflowId = null;
         log(`Run error: ${msg.error}`);
       }
       if (msg.type === 'workflow.run.completed') {
         isProcessing = false;
         processingLabel = '';
+        if (activeRunMode === 'guided' && activeRunWorkflowId) {
+          setGuidedHandoff(activeRunWorkflowId);
+        }
+        activeRunMode = null;
+        activeRunWorkflowId = null;
         log(`Run completed: ${msg.workflowId}`);
         void refreshData();
       }
@@ -447,6 +499,14 @@ function sendRun(workflowId: string, mode: Mode) {
   );
   isProcessing = true;
   processingLabel = workflowId;
+  activeRunMode = mode;
+  activeRunWorkflowId = workflowId;
+  if (mode === 'guided') {
+    const step = stepByWorkflowId(workflowId);
+    if (step) {
+      guidedNarrative = `Oi! Eu sou ${step.persona}. Vou te guiar nesta etapa: \"${step.label}\".`;
+    }
+  }
   log(`Run enviado: ${workflowId} [${mode}]`);
   renderAll();
 }
@@ -518,6 +578,10 @@ screen.key(['enter'], () => {
   if (questionBox.visible) return;
   if (screenMode === 'home') {
     screenMode = homeSelected === 0 ? 'guided' : 'expert';
+    if (screenMode === 'guided') {
+      setGuidedIntro();
+      log('Mary: "Oi, eu vou começar com você pelo discovery da ideia."');
+    }
     renderAll();
     return;
   }
