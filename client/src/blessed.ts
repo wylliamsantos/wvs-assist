@@ -153,7 +153,7 @@ let pendingQuestion: PendingQuestion | null = null;
 let guidedNarrative = 'Escolha Jornada Guiada para começar com a Mary no discovery.';
 let activeRunMode: Mode | null = null;
 let activeRunWorkflowId: string | null = null;
-let conversationLines: string[] = ['Bem-vindo ao WVS Orbit.'];
+let conversationLines: string[] = ['⚙️ WVS Orbit pronto para iniciar.'];
 
 function log(msg: string) {
   logs.log(`[${new Date().toISOString()}] ${msg}`);
@@ -162,6 +162,28 @@ function log(msg: string) {
 function addConversation(line: string) {
   conversationLines.push(line);
   if (conversationLines.length > 80) conversationLines = conversationLines.slice(-80);
+}
+
+function firstNameFromPersona(personaLabel: string) {
+  return personaLabel.split('—')[0]?.trim() || personaLabel;
+}
+
+function emojiForPersona(personaLabel: string) {
+  const first = firstNameFromPersona(personaLabel).toLowerCase();
+  const female = new Set(['mary', 'sally', 'amelia', 'paige']);
+  return female.has(first) ? '👩' : '👨';
+}
+
+function agentLine(personaLabel: string, text: string) {
+  return `${emojiForPersona(personaLabel)} ${firstNameFromPersona(personaLabel)}: ${text}`;
+}
+
+function userLine(text: string) {
+  return `🧑 Você: ${text}`;
+}
+
+function systemLine(text: string) {
+  return `⚙️ ${text}`;
 }
 
 function renderHeader() {
@@ -216,10 +238,13 @@ function setGuidedHandoff(completedWorkflowId: string) {
   const next = nextStepAfterWorkflow(completedWorkflowId);
   if (!current) return;
   if (!next) {
-    guidedNarrative = `Ótimo trabalho. Eu, ${current.persona}, finalizei a última etapa. Jornada concluída com sucesso.`;
+    guidedNarrative = 'Jornada concluída com sucesso.';
+    addConversation(agentLine(current.persona, `finalizei ${current.label}. Encerramos a jornada por aqui.`));
     return;
   }
-  guidedNarrative = `Resumo: ${current.persona} concluiu \"${current.label}\". Agora vou passar para ${next.persona}, que assume \"${next.label}\".`;
+  guidedNarrative = `${firstNameFromPersona(current.persona)} passou o contexto para ${firstNameFromPersona(next.persona)}.`;
+  addConversation(agentLine(current.persona, `concluí ${current.label}. Vou passar para ${firstNameFromPersona(next.persona)}.`));
+  addConversation(agentLine(next.persona, `recebi o contexto e vou assumir ${next.label}.`));
 }
 
 function renderHome() {
@@ -248,7 +273,7 @@ function renderHome() {
 }
 function renderGuided() {
   leftPanel.setLabel(' Guided Journey ');
-  centerPanel.setLabel(' Condução da Etapa ');
+  centerPanel.setLabel(' Etapa Atual ');
 
   const progress = getGuidedProgress();
   const step = nextGuidedStep();
@@ -273,17 +298,14 @@ function renderGuided() {
   }
 
   centerPanel.setContent([
-    `{bold}Etapa atual:{/bold} ${step.label}`,
-    `{bold}Especialista:{/bold} ${step.persona}`,
+    `${emojiForPersona(step.persona)} ${firstNameFromPersona(step.persona)} • ${step.label}`,
     isProcessing
       ? '{yellow-fg}Agente processando... aguarde{/yellow-fg}'
       : '{cyan-fg}Pressione Enter para iniciar esta etapa{/cyan-fg}',
     '',
-    '{bold}Condução{/bold}',
     guidedNarrative,
     '',
-    '{bold}Histórico{/bold}',
-    ...conversationLines.slice(-14).map((line) => `• ${line}`),
+    ...conversationLines.slice(-16).map((line) => `• ${line}`),
   ].join('\n'));
 }
 function renderExpert() {
@@ -307,10 +329,9 @@ function renderExpert() {
       return `${on ? '{magenta-fg}➤{/magenta-fg}' : ' '} ${c.personaName} {gray-fg}(${c.phase}){/gray-fg}`;
     }),
     '',
-    sel ? `{bold}Selecionado:{/bold} ${sel.personaName}` : 'Sem card selecionado',
+    sel ? `${emojiForPersona(sel.personaName)} ${firstNameFromPersona(sel.personaName)} selecionado` : 'Sem card selecionado',
     sel ? sel.summary : '',
     '',
-    '{bold}Histórico{/bold}',
     ...conversationLines.slice(-14).map((line) => `• ${line}`),
   ].join('\n'));
 }
@@ -346,10 +367,10 @@ function connectMcp() {
         if (msg.runMode === 'expert') {
           const card = expertCards.find((c) => c.workflowId === msg.workflowId);
           if (card) {
-            addConversation(`${card.personaName}: Oi, vou assumir essa análise e te retorno com recomendação objetiva.`);
+            addConversation(agentLine(card.personaName, 'Oi, vou assumir essa análise e te retorno com recomendação objetiva.'));
           }
         }
-        addConversation(`Execução iniciada: ${msg.workflowId}`);
+        addConversation(systemLine(`Execução iniciada: ${msg.workflowId}`));
         log(`Run started: ${msg.workflowId}`);
       }
       if (msg.type === 'workflow.question') {
@@ -359,7 +380,8 @@ function connectMcp() {
           sessionId: msg.sessionId,
         };
         const ownerStep = activeRunWorkflowId ? stepByWorkflowId(activeRunWorkflowId) : null;
-        questionBox.setLabel(` Pergunta do Agente ${ownerStep ? `— ${ownerStep.persona}` : ''} `);
+        questionBox.setLabel(` Pergunta ${ownerStep ? `${emojiForPersona(ownerStep.persona)} ${firstNameFromPersona(ownerStep.persona)}` : 'do Agente'} `);
+        if (ownerStep) addConversation(agentLine(ownerStep.persona, pendingQuestion.prompt));
         questionPrompt.setContent(pendingQuestion.prompt);
         questionInput.setValue('');
         questionBox.show();
@@ -371,7 +393,7 @@ function connectMcp() {
         processingLabel = '';
         activeRunMode = null;
         activeRunWorkflowId = null;
-        addConversation(`Falha na execução: ${msg.error}`);
+        addConversation(systemLine(`Falha na execução: ${msg.error}`));
         log(`Run error: ${msg.error}`);
       }
       if (msg.type === 'workflow.run.completed') {
@@ -380,7 +402,7 @@ function connectMcp() {
         if (activeRunMode === 'guided' && activeRunWorkflowId) {
           setGuidedHandoff(activeRunWorkflowId);
         }
-        addConversation(`Execução concluída: ${msg.workflowId}`);
+        addConversation(systemLine(`Execução concluída: ${msg.workflowId}`));
         activeRunMode = null;
         activeRunWorkflowId = null;
         log(`Run completed: ${msg.workflowId}`);
@@ -459,11 +481,11 @@ function sendRun(workflowId: string, mode: Mode) {
     const step = stepByWorkflowId(workflowId);
     if (step) {
       guidedNarrative = `Oi! Eu sou ${step.persona}. Vou te guiar nesta etapa: \"${step.label}\".`;
-      addConversation(`${step.persona}: vamos iniciar ${step.label}.`);
+      addConversation(agentLine(step.persona, `vamos iniciar ${step.label}.`));
     }
   } else {
     const card = expertCards.find((c) => c.workflowId === workflowId);
-    if (card) addConversation(`Solicitação enviada para ${card.personaName}.`);
+    if (card) addConversation(systemLine(`Solicitação enviada para ${firstNameFromPersona(card.personaName)}.`));
   }
   log(`Run enviado: ${workflowId} [${mode}]`);
   renderAll();
@@ -493,7 +515,7 @@ questionInput.on('submit', (value) => {
   const answer = String(value ?? '').trim();
   if (!answer) return;
   ws.send(JSON.stringify({ type: 'workflow.answer', questionId: pendingQuestion.questionId, answer }));
-  addConversation(`Você: ${answer}`);
+  addConversation(userLine(answer));
   log(`Resposta enviada para ${pendingQuestion.questionId}`);
   pendingQuestion = null;
   questionBox.hide();
@@ -539,7 +561,7 @@ screen.key(['enter'], () => {
     screenMode = homeSelected === 0 ? 'guided' : 'expert';
     if (screenMode === 'guided') {
       setGuidedIntro();
-      addConversation('Mary: Oi, eu vou começar com você pelo discovery da ideia.');
+      addConversation(agentLine('Mary — Business Analyst', 'Oi, eu vou começar com você pelo discovery da ideia.'));
     }
     renderAll();
     return;
