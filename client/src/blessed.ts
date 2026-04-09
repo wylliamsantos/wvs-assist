@@ -52,7 +52,7 @@ const GUIDED_FLOW = [
   { phase: 'documentation', persona: 'Paige — Technical Writer', workflowId: 'documentation.changelog-journal', label: 'Documentação Final' },
 ] as const;
 
-const screen = blessed.screen({ smartCSR: true, title: 'BMAD Orchestrator', fullUnicode: true });
+const screen = blessed.screen({ smartCSR: true, title: 'WVS Orbit', fullUnicode: true });
 
 const header = blessed.box({
   parent: screen,
@@ -61,7 +61,7 @@ const header = blessed.box({
   width: '100%',
   height: 3,
   tags: true,
-  style: { bg: 'magenta', fg: 'black' },
+  style: { bg: 'blue', fg: 'white' },
 });
 
 const leftPanel = blessed.box({
@@ -174,7 +174,7 @@ function renderHeader() {
     ? '[↑/↓] escolher [enter] entrar [q] sair'
     : '[↑/↓] navegar [enter] executar [r] refresh [h] home [q] sair';
   const processing = isProcessing ? ` | PROCESSANDO: ${processingLabel}` : '';
-  header.setContent(` BMAD Orchestrator | ${screenLabel} | ${tips}${processing}`);
+  header.setContent(` WVS Orbit — Powered by WVS Systems | ${screenLabel} | ${tips}${processing}`);
 }
 
 function getGuidedProgress() {
