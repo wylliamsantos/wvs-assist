@@ -26,7 +26,23 @@ const header = blessed.box({ parent: screen, top: 0, left: 0, width: '100%', hei
 const journey = blessed.box({ parent: screen, top: 3, left: 0, width: '100%', height: 4, border: { type: 'line' }, label: ' Jornada ', tags: true, style: { border: { fg: 'cyan' } } });
 const main = blessed.box({ parent: screen, top: 7, left: 0, width: '100%', height: '100%-11', border: { type: 'line' }, label: ' Conversa ', tags: true, scrollable: true, alwaysScroll: true, style: { border: { fg: 'yellow' } } });
 const inputHint = blessed.box({ parent: screen, bottom: 3, left: 0, width: '100%', height: 1, tags: true, style: { fg: 'gray' } });
-const input = blessed.textbox({ parent: screen, bottom: 1, left: 0, width: '100%', height: 2, border: { type: 'line' }, inputOnFocus: true, keys: true, mouse: true, style: { border: { fg: 'cyan' } } });
+const input = blessed.textbox({
+  parent: screen,
+  bottom: 1,
+  left: 0,
+  width: '100%',
+  height: 3,
+  border: { type: 'line' },
+  inputOnFocus: true,
+  keys: true,
+  mouse: true,
+  style: {
+    fg: 'white',
+    bg: 'black',
+    border: { fg: 'cyan' },
+    focus: { border: { fg: 'magenta' } }
+  }
+});
 const sys = blessed.box({ parent: screen, bottom: 0, left: 0, width: '100%', height: 1, tags: true, style: { fg: 'gray' } });
 
 let ws: WebSocket | null = null;
@@ -186,7 +202,16 @@ function connect() {
 
 input.on('submit', (v) => {
   const answer = String(v ?? '').trim();
-  if (!answer || !pendingQuestionId || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!pendingQuestionId || !ws || ws.readyState !== WebSocket.OPEN) {
+    setSys('sem pergunta pendente para responder');
+    return;
+  }
+  if (!answer) {
+    setSys('resposta vazia não é permitida');
+    input.focus();
+    screen.render();
+    return;
+  }
   ws.send(JSON.stringify({ type: 'workflow.answer', questionId: pendingQuestionId, answer }));
   add(`🧑 Você: ${answer}`);
   pendingQuestionId = null;
@@ -210,6 +235,11 @@ screen.key(['down', 'j'], () => {
   renderAll();
 });
 screen.key(['enter'], () => {
+  if (pendingQuestionId) {
+    input.focus();
+    return;
+  }
+
   if (screenMode === 'home') {
     screenMode = homeSelected === 0 ? 'guided' : 'expert';
     if (screenMode === 'guided') add('👩 Mary: me conta sua ideia e o problema que você quer resolver.');
