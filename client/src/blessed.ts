@@ -186,6 +186,16 @@ function systemLine(text: string) {
   return `⚙️ ${text}`;
 }
 
+function formattedConversation(limit: number) {
+  const lines = conversationLines.slice(-limit);
+  const out: string[] = [];
+  lines.forEach((line, idx) => {
+    if (idx > 0) out.push('');
+    out.push(`• ${line}`);
+  });
+  return out;
+}
+
 function renderHeader() {
   const screenLabel = screenMode === 'home' ? 'HOME' : screenMode === 'guided' ? 'GUIDED' : 'EXPERT';
   const tips = screenMode === 'home'
@@ -267,8 +277,8 @@ function renderHome() {
       ? 'Guided: começa com Mary no discovery e segue com handoff humano entre especialistas.'
       : 'Expert: selecione um especialista por card para uma análise pontual.',
     '',
-    '{bold}Histórico Conversacional{/bold}',
-    ...conversationLines.slice(-10).map((line) => `• ${line}`),
+    '{bold}Conversa{/bold}',
+    ...formattedConversation(8),
   ].join('\n'));
 }
 function renderGuided() {
@@ -292,7 +302,7 @@ function renderGuided() {
     centerPanel.setContent([
       '{green-fg}Jornada concluída.{/green-fg}',
       '',
-      ...conversationLines.slice(-16).map((line) => `• ${line}`),
+      ...formattedConversation(12),
     ].join('\n'));
     return;
   }
@@ -305,7 +315,7 @@ function renderGuided() {
     '',
     guidedNarrative,
     '',
-    ...conversationLines.slice(-16).map((line) => `• ${line}`),
+    ...formattedConversation(12),
   ].join('\n'));
 }
 function renderExpert() {
@@ -332,7 +342,7 @@ function renderExpert() {
     sel ? `${emojiForPersona(sel.personaName)} ${firstNameFromPersona(sel.personaName)} selecionado` : 'Sem card selecionado',
     sel ? sel.summary : '',
     '',
-    ...conversationLines.slice(-14).map((line) => `• ${line}`),
+    ...formattedConversation(10),
   ].join('\n'));
 }
 function renderAll() {
@@ -384,7 +394,9 @@ function connectMcp() {
         if (ownerStep) addConversation(agentLine(ownerStep.persona, pendingQuestion.prompt));
         questionPrompt.setContent(pendingQuestion.prompt);
         questionInput.setValue('');
+        renderAll();
         questionBox.show();
+        questionBox.setFront();
         questionInput.focus();
         screen.render();
       }
@@ -509,7 +521,7 @@ function runExpertSelected() {
 questionInput.on('submit', (value) => {
   if (!pendingQuestion || !ws || ws.readyState !== WebSocket.OPEN) {
     questionBox.hide();
-    screen.render();
+    renderAll();
     return;
   }
   const answer = String(value ?? '').trim();
@@ -519,12 +531,12 @@ questionInput.on('submit', (value) => {
   log(`Resposta enviada para ${pendingQuestion.questionId}`);
   pendingQuestion = null;
   questionBox.hide();
-  screen.render();
+  renderAll();
 });
 
 questionInput.key('escape', () => {
   questionBox.hide();
-  screen.render();
+  renderAll();
 });
 
 screen.key(['q', 'C-c'], () => process.exit(0));
