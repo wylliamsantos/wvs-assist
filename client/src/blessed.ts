@@ -68,52 +68,39 @@ const leftPanel = blessed.box({
   parent: screen,
   top: 3,
   left: 0,
-  width: '34%',
-  height: '68%-3',
+  width: '100%',
+  height: 6,
   label: ' Jornada ',
   border: { type: 'line' },
   style: { border: { fg: 'cyan' } },
   tags: true,
-  scrollable: true,
 });
 
 const centerPanel = blessed.box({
   parent: screen,
-  top: 3,
-  left: '34%',
-  width: '36%',
-  height: '68%-3',
-  label: ' Seleção ',
+  top: 9,
+  left: 0,
+  width: '100%',
+  height: '100%-15',
+  label: ' Workspace ',
   border: { type: 'line' },
   style: { border: { fg: 'yellow' } },
   tags: true,
   scrollable: true,
-});
-
-const rightPanel = blessed.box({
-  parent: screen,
-  top: 3,
-  left: '70%',
-  width: '30%',
-  height: '68%-3',
-  label: ' Detalhes ',
-  border: { type: 'line' },
-  style: { border: { fg: 'white' } },
-  tags: true,
-  scrollable: true,
+  alwaysScroll: true,
 });
 
 const logs = blessed.log({
   parent: screen,
-  top: '68%',
+  top: '100%-6',
   left: 0,
   width: '100%',
-  height: '32%',
-  label: ' Activity Log ',
+  height: 6,
+  label: ' System Log ',
   border: { type: 'line' },
-  style: { border: { fg: 'green' } },
+  style: { border: { fg: 'gray' } },
   tags: true,
-  scrollback: 500,
+  scrollback: 120,
 });
 
 const questionBox = blessed.box({
@@ -166,9 +153,15 @@ let pendingQuestion: PendingQuestion | null = null;
 let guidedNarrative = 'Escolha Jornada Guiada para começar com a Mary no discovery.';
 let activeRunMode: Mode | null = null;
 let activeRunWorkflowId: string | null = null;
+let conversationLines: string[] = ['Bem-vindo ao WVS Orbit.'];
 
 function log(msg: string) {
   logs.log(`[${new Date().toISOString()}] ${msg}`);
+}
+
+function addConversation(line: string) {
+  conversationLines.push(line);
+  if (conversationLines.length > 80) conversationLines = conversationLines.slice(-80);
 }
 
 function renderHeader() {
@@ -177,7 +170,8 @@ function renderHeader() {
     ? '[↑/↓] escolher [enter] entrar [q] sair'
     : '[↑/↓] navegar [enter] executar [r] refresh [h] home [q] sair';
   const processing = isProcessing ? ` | PROCESSANDO: ${processingLabel}` : '';
-  header.setContent(` WVS Orbit — Powered by WVS Systems | ${screenLabel} | ${tips}${processing}`);
+  header.align = 'center';
+  header.setContent(`WVS Orbit — Powered by WVS Systems | ${screenLabel} | ${tips}${processing}`);
 }
 
 function getGuidedProgress() {
@@ -230,96 +224,71 @@ function setGuidedHandoff(completedWorkflowId: string) {
 
 function renderHome() {
   leftPanel.setLabel(' Jornada BMAD ');
-  centerPanel.setLabel(' Escolha o Modo da Sessão ');
-  rightPanel.setLabel(' O que vai acontecer ');
+  centerPanel.setLabel(' Sessão Inicial ');
 
   const options = ['Jornada Guiada (do zero)', 'Consulta Especialista (pontual)'];
-  centerPanel.setContent(
-    options
-      .map((opt, i) => `${homeSelected === i ? '{magenta-fg}➤{/magenta-fg}' : ' '} ${opt}`)
-      .join('\n\n')
-  );
 
   leftPanel.setContent([
-    '{bold}Fluxo esperado:{/bold}',
-    '',
-    ...GUIDED_FLOW.map((s, idx) => `${idx + 1}. ${s.label}`),
-    '',
-    '{gray-fg}No Guided, você não escolhe workflow técnico.{/gray-fg}',
+    '{bold}Fases:{/bold} Descoberta → Planejamento → Arquitetura → Execução → QA → Documentação',
+    '{gray-fg}A jornada guided escolhe o próximo passo automaticamente.{/gray-fg}',
   ].join('\n'));
 
-  rightPanel.setContent(
+  centerPanel.setContent([
+    '{bold}Como quer começar esta sessão?{/bold}',
+    '',
+    ...options.map((opt, i) => `${homeSelected === i ? '{magenta-fg}➤{/magenta-fg}' : ' '} ${opt}`),
+    '',
     homeSelected === 0
-      ? [
-          '{bold}Guided{/bold}',
-          '',
-          'Inicia automaticamente com Mary (Business Analyst).',
-          'Perguntas de descoberta da ideia.',
-          'Handoff entre fases até entrega final.',
-        ].join('\n')
-      : [
-          '{bold}Expert{/bold}',
-          '',
-          'Você escolhe um especialista por card.',
-          'Recebe opinião técnica pontual.',
-          'Pode importar para jornada guided depois.',
-        ].join('\n')
-  );
+      ? 'Guided: começa com Mary no discovery e segue com handoff humano entre especialistas.'
+      : 'Expert: selecione um especialista por card para uma análise pontual.',
+    '',
+    '{bold}Histórico Conversacional{/bold}',
+    ...conversationLines.slice(-10).map((line) => `• ${line}`),
+  ].join('\n'));
 }
-
 function renderGuided() {
   leftPanel.setLabel(' Guided Journey ');
-  centerPanel.setLabel(' Próxima Etapa ');
-  rightPanel.setLabel(' Detalhes da Etapa ');
+  centerPanel.setLabel(' Condução da Etapa ');
 
   const progress = getGuidedProgress();
   const step = nextGuidedStep();
 
   leftPanel.setContent([
-    `{bold}Progresso{/bold}: ${progressBar(progress.done, progress.total)}`,
-    '',
-    ...GUIDED_FLOW.map((s) => {
+    `{bold}Progresso:{/bold} ${progressBar(progress.done, progress.total, 24)}`,
+    GUIDED_FLOW.map((s) => {
       const done = sessions.some((x) => x.runMode === 'guided' && x.phase === s.phase && x.status === 'done');
       const running = sessions.some((x) => x.runMode === 'guided' && x.phase === s.phase && x.status === 'in-progress');
       const marker = done ? '{green-fg}✔{/green-fg}' : running ? '{yellow-fg}●{/yellow-fg}' : '{gray-fg}○{/gray-fg}';
       return `${marker} ${s.label}`;
-    }),
+    }).join('   '),
   ].join('\n'));
 
   if (!step) {
-    centerPanel.setContent('{green-fg}Jornada concluída.{/green-fg}\n\nTodos os passos guided foram finalizados.');
-    rightPanel.setContent('Você pode iniciar nova sessão guided na Home (h).');
+    centerPanel.setContent([
+      '{green-fg}Jornada concluída.{/green-fg}',
+      '',
+      ...conversationLines.slice(-16).map((line) => `• ${line}`),
+    ].join('\n'));
     return;
   }
 
   centerPanel.setContent([
-    `{bold}${step.label}{/bold}`,
-    '',
-    `Especialista: ${step.persona}`,
-    '',
+    `{bold}Etapa atual:{/bold} ${step.label}`,
+    `{bold}Especialista:{/bold} ${step.persona}`,
     isProcessing
       ? '{yellow-fg}Agente processando... aguarde{/yellow-fg}'
       : '{cyan-fg}Pressione Enter para iniciar esta etapa{/cyan-fg}',
-  ].join('\n'));
-
-  rightPanel.setContent([
-    '{bold}Condução Humana{/bold}',
     '',
+    '{bold}Condução{/bold}',
     guidedNarrative,
     '',
-    '{bold}Como funciona{/bold}',
-    '1) Inicia a etapa atual',
-    '2) Responde perguntas do agente (popup)',
-    '3) Finaliza e libera próxima etapa',
-    '',
-    '{gray-fg}Workflows técnicos ficam ocultos no Guided.{/gray-fg}',
+    '{bold}Histórico{/bold}',
+    ...conversationLines.slice(-14).map((line) => `• ${line}`),
   ].join('\n'));
 }
-
 function renderExpert() {
-  leftPanel.setLabel(' Expert Specialists ');
-  centerPanel.setLabel(' Cards de Especialistas ');
-  rightPanel.setLabel(' Detalhes ');
+  leftPanel.setLabel(' Expert Journey ');
+  centerPanel.setLabel(' Especialistas ');
 
   if (expertCards.length === 0) {
     centerPanel.setContent('{gray-fg}Sem especialistas disponíveis.{/gray-fg}');
@@ -327,42 +296,24 @@ function renderExpert() {
   }
 
   leftPanel.setContent([
-    '{bold}Modo Expert{/bold}',
-    '',
-    'Escolha um especialista com setas.',
-    'Pressione Enter para rodar.',
-    isProcessing ? '{yellow-fg}Processando... navegação bloqueada{/yellow-fg}' : '{green-fg}Pronto{/green-fg}',
+    '{bold}Expert{/bold}: escolha o especialista por card',
+    isProcessing ? '{yellow-fg}Processando... aguarde{/yellow-fg}' : '{green-fg}Pronto para nova consulta{/green-fg}',
   ].join('\n'));
 
-  centerPanel.setContent(
-    expertCards
-      .map((c, i) => {
-        const on = i === expertSelected;
-        return [
-          `${on ? '{magenta-fg}┏━{/magenta-fg}' : '{gray-fg}┌─{/gray-fg}'} ${c.personaName}`,
-          `   {gray-fg}${c.phase}{/gray-fg}`,
-          `${on ? '{magenta-fg}┗━{/magenta-fg}' : '{gray-fg}└─{/gray-fg}'} ${c.summary.slice(0, 58)}`,
-        ].join('\n');
-      })
-      .join('\n\n')
-  );
-
   const sel = expertCards[expertSelected];
-  rightPanel.setContent(
-    sel
-      ? [
-          `{bold}${sel.personaName}{/bold}`,
-          '',
-          `Fase: ${sel.phase}`,
-          '',
-          'Esse especialista vai te ajudar nessa parte do projeto.',
-          '',
-          isProcessing ? '{yellow-fg}Aguarde finalizar execução atual{/yellow-fg}' : '{cyan-fg}Pressione Enter para executar{/cyan-fg}',
-        ].join('\n')
-      : 'Sem card selecionado'
-  );
+  centerPanel.setContent([
+    ...expertCards.map((c, i) => {
+      const on = i === expertSelected;
+      return `${on ? '{magenta-fg}➤{/magenta-fg}' : ' '} ${c.personaName} {gray-fg}(${c.phase}){/gray-fg}`;
+    }),
+    '',
+    sel ? `{bold}Selecionado:{/bold} ${sel.personaName}` : 'Sem card selecionado',
+    sel ? sel.summary : '',
+    '',
+    '{bold}Histórico{/bold}',
+    ...conversationLines.slice(-14).map((line) => `• ${line}`),
+  ].join('\n'));
 }
-
 function renderAll() {
   renderHeader();
   if (screenMode === 'home') renderHome();
@@ -395,9 +346,10 @@ function connectMcp() {
         if (msg.runMode === 'expert') {
           const card = expertCards.find((c) => c.workflowId === msg.workflowId);
           if (card) {
-            log(`${card.personaName}: "Oi, vou assumir essa análise e te retorno com recomendação objetiva."`);
+            addConversation(`${card.personaName}: Oi, vou assumir essa análise e te retorno com recomendação objetiva.`);
           }
         }
+        addConversation(`Execução iniciada: ${msg.workflowId}`);
         log(`Run started: ${msg.workflowId}`);
       }
       if (msg.type === 'workflow.question') {
@@ -419,6 +371,7 @@ function connectMcp() {
         processingLabel = '';
         activeRunMode = null;
         activeRunWorkflowId = null;
+        addConversation(`Falha na execução: ${msg.error}`);
         log(`Run error: ${msg.error}`);
       }
       if (msg.type === 'workflow.run.completed') {
@@ -427,6 +380,7 @@ function connectMcp() {
         if (activeRunMode === 'guided' && activeRunWorkflowId) {
           setGuidedHandoff(activeRunWorkflowId);
         }
+        addConversation(`Execução concluída: ${msg.workflowId}`);
         activeRunMode = null;
         activeRunWorkflowId = null;
         log(`Run completed: ${msg.workflowId}`);
@@ -505,7 +459,11 @@ function sendRun(workflowId: string, mode: Mode) {
     const step = stepByWorkflowId(workflowId);
     if (step) {
       guidedNarrative = `Oi! Eu sou ${step.persona}. Vou te guiar nesta etapa: \"${step.label}\".`;
+      addConversation(`${step.persona}: vamos iniciar ${step.label}.`);
     }
+  } else {
+    const card = expertCards.find((c) => c.workflowId === workflowId);
+    if (card) addConversation(`Solicitação enviada para ${card.personaName}.`);
   }
   log(`Run enviado: ${workflowId} [${mode}]`);
   renderAll();
@@ -535,6 +493,7 @@ questionInput.on('submit', (value) => {
   const answer = String(value ?? '').trim();
   if (!answer) return;
   ws.send(JSON.stringify({ type: 'workflow.answer', questionId: pendingQuestion.questionId, answer }));
+  addConversation(`Você: ${answer}`);
   log(`Resposta enviada para ${pendingQuestion.questionId}`);
   pendingQuestion = null;
   questionBox.hide();
@@ -580,7 +539,7 @@ screen.key(['enter'], () => {
     screenMode = homeSelected === 0 ? 'guided' : 'expert';
     if (screenMode === 'guided') {
       setGuidedIntro();
-      log('Mary: "Oi, eu vou começar com você pelo discovery da ideia."');
+      addConversation('Mary: Oi, eu vou começar com você pelo discovery da ideia.');
     }
     renderAll();
     return;
