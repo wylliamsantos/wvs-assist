@@ -1,0 +1,30 @@
+id: testing.quality-gate-report
+persona: murat-qa
+phase: testing
+summary: Murat consolida indicadores de qualidade e recomenda go/no-go.
+inputs:
+  - key: coverage_stats
+    description: Relatório de cobertura/unit tests
+  - key: defect_log
+    description: Bugs abertos vs. fechados
+  - key: ci_pipeline
+    description: Histórico de execuções CI/CD
+steps:
+  - type: instruction
+    text: Compilar métricas chave (pass rate, falhas críticas, flaky tests).
+  - type: question
+    prompt: Qual risco precisa de mitigação antes do release?
+  - type: tool
+    name: ci.report
+    params:
+      path: logs/ci.json
+  - type: instruction
+    text: Elaborar recomendação com critérios objetivos e owners.
+outputs:
+  - path: docs/quality-gate-report.md
+    description: Relatório de health + recomendação go/no-go
+  - path: docs/test-readiness-checklist.md
+    description: Checklist de pendências bloqueantes e responsáveis
+checks:
+  - type: gate
+    condition: Release manager assina o quality gate

@@ -1,0 +1,39 @@
+id: planning.create-prd
+persona: john-pm
+phase: planning
+summary: John transforma requisitos em PRD completo e priorizado.
+inputs:
+  -
+    key: product_brief
+    description: Arquivo docs/product-brief.md
+  -
+    key: research_notes
+    description: Insights do time
+steps:
+  -
+    type: instruction
+    text: "Organize objetivos, escopo e n\u00e3o objetivos."
+  -
+    type: question
+    prompt: Quais métricas definem sucesso deste release?
+  -
+    type: tool
+    name: analysis.diff
+    params:
+      path: docs
+      pattern: '*.md'
+  -
+    type: handoff
+    target: sally-ux
+    text: Validar fluxos críticos antes de congelar PRD.
+outputs:
+  -
+    path: docs/PRD.md
+    description: Product Requirements Document
+  -
+    path: docs/epics.md
+    description: Mapa de épicos
+checks:
+  -
+    type: review
+    condition: Product council aprovou o PRD

@@ -1,0 +1,26 @@
+id: planning.kpi-alignment
+persona: john-pm
+phase: planning
+summary: Ajustar KPIs e metas do release antes do início do sprint.
+inputs:
+  - key: prd
+    description: docs/PRD.md
+  - key: metrics_snapshot
+    description: Relatório atual das métricas do produto.
+steps:
+  - type: instruction
+    text: "Compare KPIs definidos vs. métricas atualizadas."
+  - type: question
+    prompt: Quais ajustes de meta são necessários para este release?
+  - type: tool
+    name: planning.brief
+    params:
+      template: kpi-alignment
+  - type: instruction
+    text: "Registre owners e checkpoints para cada KPI."
+outputs:
+  - path: docs/kpi-alignment.md
+    description: Documento com metas ajustadas e owners.
+checks:
+  - type: review
+    condition: Aprovação do sponsor de produto.

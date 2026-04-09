@@ -1,0 +1,29 @@
+id: documentation.changelog-journal
+persona: paige-writer
+phase: documentation
+summary: Paige mantém changelog audível com contexto de decisão.
+inputs:
+  - key: dev_digest
+    description: docs/dev-digest.md fornecido por Amelia
+  - key: release_notes
+    description: Anotações do PM sobre o release
+steps:
+  - type: instruction
+    text: Organizar entradas por data, módulo e impacto ao usuário.
+  - type: question
+    prompt: Alguma mudança precisa de callout especial para clientes?
+  - type: tool
+    name: docs.diff
+    params:
+      path: docs/
+      pattern: '*.md'
+  - type: instruction
+    text: Adicionar links para PRs/commits e owners responsáveis.
+outputs:
+  - path: docs/changelog.md
+    description: Changelog cronológico com contexto e links
+  - path: docs/release-highlights.md
+    description: Destaques resumidos para stakeholders não técnicos
+checks:
+  - type: review
+    condition: PM valida messaging e datas

@@ -1,0 +1,9 @@
+{
+  "name": "bmad-mcp-stub",
+  "version": "0.1.0",
+  "description": "Backend MCP mock para BMAD",
+  "scripts": {
+    "dev": "bun run src/server.ts",
+    "start": "bun run src/server.ts"
+  }
+}

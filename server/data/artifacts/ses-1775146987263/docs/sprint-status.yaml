@@ -1,0 +1,127 @@
+# Visão do sprint
+
+Gerado automaticamente pelo workflow implementation.sprint-planning.
+
+## Resumo do Resultado
+Olá, equipe. Sou **Bob**, seu Scrum Master.
+
+Recebi a notificação da nova sessão **ses-1775146987263** iniciada via TUI. Estou assumindo o papel de facilitador na fase **Implementation - Sprint Planning**.
+
+Meu objetivo é garantir que selecionemos o trabalho correto, mitigarmos riscos e tenhamos clareza sobre o "Definition of Done". Abaixo, apresento o plano estruturado para esta sessão, incluindo as ações concretas e a pré-visualização dos artefatos gerados.
+
+---
+
+### 📅 Agenda do Sprint Planning
+**Sprint Objetivo:** Entregar valor funcional reduzindo o ciclo de feedback.
+**Capacidade Alocada:** Calculada com base no `capacity` (ex: 80h disponíveis na Sprint, considerando tempo para refinamento e reuniões).
+
+---
+
+### 🛠️ Passo 1: [Instruction] Seleção de Epic e Stories Candidatas
+**Ação:**
+1.  Revisar o `backlog` priorizado.
+2.  Mapear capacidade técnica vs. demanda do backlog.
+3.  Seletor de itens: Selecionar itens que somam pontos ≤ 85% da capacidade (para buffer de imprevisibilidade).
+
+**Decisão:**
+*   Epic Principal: `Feature_X_Core`
+*   Stories Selecionadas: `story-001` (Login), `story-002` (Dashboard), `story-003` (Export PDF).
+*   *Racional:* `story-004` (Otimização Banco de Dados) movida para Backlog para garantir qualidade do core.
+
+### 🛠️ Passo 2: [Instruction] Definição de DoD e Riscos
+**Ação:**
+1.  Padronizar **DoD (Definition of Done)** para garantir qualidade consistente.
+2.  Identificar **Riscos de Negócio/Técnico** para cada story.
+
+**Detalhes do DoD:**
+*   [ ] Código revisado (Code Review)
+*   [ ] Testes unitários e de integração passando (>90% cobertura)
+*   [ ] Deploy para staging realizado
+*   [ ] Documentação de API atualizada
+*   [ ] Aceite de negócio validado
+
+**Riscos Mapeados:**
+*   Story 001: Dependência externa (Auth Service) instável. *Mitigação: Mock em ambiente local.*
+*   Story 002: Volume de dados maior que o esperado no Dashboard. *Mitigação: Paginação implementada.*
+
+### 🛠️ Passo 3: [Tool] Geração do Artefato de Status
+**Execução:**
+Estou invocando a ferramenta de status para gerar o registro oficial do sprint no nosso repositório.
+
+```bash
+{"type":"tool","name":"generate.status-yaml","params":{"path":"docs/sprint-status.yaml"}}
+```
+
+**Conteúdo do Artefato (`docs/sprint-status.yaml`):**
+
+```yaml
+sprint_session: ses-1775146987263
+workflow: sprint-planning
+phase: implementation
+status: initiated
+
+team_capacity_hours: 40
+estimated_velocity_points: 24
+
+selected_epics:
+  - id: EPIC-001
+    name: Feature_X_Core
+    priority: high
+
+sprint_commitment:
+  stories:
+    - id: STORY-001
+      title: "Autenticação de Usuário"
+      points: 5
+      do_d: ["Code Review", "Tests Unit", "Staging Deploy", "Acceptance"]
+      risk: "Auth Service Latency"
+      risk_mitigation: "Mock Implementation"
+      estimated_completion: Day 3
+    - id: STORY-002
+      title: "Dashboard de Métricas"
+      points: 8
+      do_d: ["Code Review", "Tests Unit", "Staging Deploy", "Acceptance"]
+      risk: "High Data Volume"
+      risk_mitigation: "Pagination Strategy"
+      estimated_completion: Day 5
+    - id: STORY-003
+      title: "Exportação PDF Relatórios"
+      points: 4
+      do_d: ["Code Review", "Tests Unit", "Staging Deploy", "Acceptance"]
+      risk: "Library Version Conflicts"
+      risk_mitigation: "Dependency Upgrade"
+      estimated_completion: Day 5
+
+artifacts_generated:
+  - docs/sprint-status.yaml
+  - docs/stories/STORY-001.md
+  - docs/stories/STORY-002.md
+  - docs/stories/STORY-003.md
+```
+
+### 🛠️ Passo 4: [Handoff] Confirmação de Prontidão Técnica
+**Ação:**
+Validar com o Tech Lead e o Time de Desenvolvimento se as estimativas estão realistas e se o ambiente está preparado.
+
+**Checklist de Handoff:**
+*   [ ] Revisão do código das stories anteriores concluída?
+*   [ ] Branch `sprint-1775146987263` criado?
+*   [ ] Rascunhos de testes aceitos pelo Product Owner?
+*   [ ] Time alinhado com os riscos do passo 2?
+
+---
+
+### 📦 Outputs Esperados (Solicitados)
+1.  **`docs/sprint-status.yaml`**: Visão oficial do sprint, commit e status.
+2.  **`docs/stories/`**: Arquivos Markdown individuais com detalhes de DoD e Riscos para cada história selecionada.
+
+---
+
+**Próximo Passos:**
+Se a equipe aprovar o commit, iniciaremos a **Daily Planning** e faremos o check-in diário no Kanban board. Estou à disposição para qualquer dúvida sobre a execução do `docs/sprint-status.yaml`.
+
+Qualquer alteração no backlog após este momento será tratada como um impedimento a ser registrado no log de mudanças. Vamos para o trabalho, equipe! 🚀
+
+## Próximos Passos
+- Revisar com o time responsável e coletar comentários.
+- Validar se os itens de "Inputs esperados" estão atualizados antes do próximo workflow.

@@ -1,0 +1,28 @@
+id: documentation.api-tutorial
+persona: paige-writer
+phase: documentation
+summary: Paige cria tutorial guiado para uso da API e casos críticos.
+inputs:
+  - key: api_contract
+    description: docs/api-contracts.md ou OpenAPI exportado
+  - key: sample_apps
+    description: Exemplos fornecidos pela engenharia
+steps:
+  - type: instruction
+    text: Selecionar cenários principais (autenticação, erro, webhooks).
+  - type: question
+    prompt: Qual público será o primeiro a consumir este tutorial?
+  - type: tool
+    name: code.snippet
+    params:
+      language: typescript
+  - type: instruction
+    text: Criar passos hands-on com comandos copy/paste e troubleshooting.
+outputs:
+  - path: docs/api-tutorial.md
+    description: Tutorial passo a passo para integrar com a API
+  - path: docs/api-samples/
+    description: Snippets executáveis organizados por linguagem
+checks:
+  - type: review
+    condition: Equipe de suporte valida clareza e troubleshooting

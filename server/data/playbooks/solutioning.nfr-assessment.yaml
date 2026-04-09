@@ -1,0 +1,32 @@
+id: solutioning.nfr-assessment
+persona: winston-architect
+phase: solutioning
+summary: Winston valida requisitos não-funcionais e define planos de mitigação.
+inputs:
+  - key: nfr_catalog
+    description: Lista de NFRs alvo (latência, disponibilidade, segurança)
+  - key: workloads
+    description: Cenários de carga e volumes projetados
+steps:
+  - type: instruction
+    text: Classificar NFRs por criticidade e mapear donos.
+  - type: tool
+    name: telemetry.snapshot
+    params:
+      path: logs/
+      focus: perf
+  - type: question
+    prompt: Qual requisito não-funcional é mais arriscado hoje e por quê?
+  - type: instruction
+    text: Documentar mitigações, SLIs/SLOs e plano de observabilidade.
+  - type: handoff
+    target: murat-qa
+    text: Sincronizar critérios de teste para NFRs críticos.
+outputs:
+  - path: docs/nfr-matrix.md
+    description: Matriz de requisitos não-funcionais e mitigações
+  - path: docs/observability-plan.md
+    description: Plano de monitoração/alertas por requisito
+checks:
+  - type: gate
+    condition: Arquitetura cobre SLIs e alertas aprovados

@@ -1,0 +1,11 @@
+[
+  {
+    "id": "ses-1775155555326",
+    "agentId": "mary-analyst",
+    "agentName": "Mary — Business Analyst",
+    "workflow": "analysis.problem-tree",
+    "status": "done",
+    "startedAt": "2026-04-02T18:45:55.327Z",
+    "updatedAt": "2026-04-02T18:48:39.884Z"
+  }
+]

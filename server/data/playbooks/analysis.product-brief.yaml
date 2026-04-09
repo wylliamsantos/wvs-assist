@@ -1,0 +1,40 @@
+id: analysis.product-brief
+persona: mary-analyst
+phase: analysis
+summary: Mary conduz pesquisa e transforma descobertas em product brief claro.
+inputs:
+  -
+    key: project_name
+    description: Nome do projeto
+  -
+    key: business_goals
+    description: Metas de negócio
+  -
+    key: constraints
+    description: Restrições relevantes
+steps:
+  -
+    type: instruction
+    text: Mapeie stakeholders e decisões já tomadas.
+  -
+    type: question
+    prompt: Quais lacunas de informação impedem a definição do escopo?
+  -
+    type: tool
+    name: research.rag
+    params:
+      query: Benchmark de competidores e tendências
+  -
+    type: instruction
+    text: Sintetize insights em bullets acionáveis.
+outputs:
+  -
+    path: docs/product-brief.md
+    description: Visão estratégica consolidada
+  -
+    path: logs/research-analysis.json
+    description: Registro estruturado
+checks:
+  -
+    type: gate
+    condition: Stakeholders aprovam visão e OKRs

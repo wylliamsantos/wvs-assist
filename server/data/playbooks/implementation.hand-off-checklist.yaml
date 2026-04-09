@@ -1,0 +1,31 @@
+id: implementation.hand-off-checklist
+persona: bob-scrum
+phase: implementation
+summary: Bob garante handoff limpo entre squads e owners externos.
+inputs:
+  - key: sprint_status
+    description: docs/sprint-status.yaml atualizado
+  - key: story_contexts
+    description: Pasta com *.context.xml prontos
+steps:
+  - type: instruction
+    text: Auditar stories com blockers ou pendências de QA.
+  - type: question
+    prompt: Qual story precisa de suporte adicional antes do handoff?
+  - type: tool
+    name: story.validate
+    params:
+      path: docs/stories
+  - type: instruction
+    text: Montar checklist por área (QA, DevOps, Support) e confirmar donos.
+  - type: handoff
+    target: amelia-dev
+    text: Confirmar responsáveis técnicos para cada entrega.
+outputs:
+  - path: docs/hand-off-checklist.md
+    description: Checklist de handoff com owners e status
+  - path: docs/handoff-risks.md
+    description: Lista de riscos/mitigações antes da virada
+checks:
+  - type: gate
+    condition: Todas as stories marcadas como ready-for-handoff

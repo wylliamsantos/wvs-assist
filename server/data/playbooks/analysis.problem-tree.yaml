@@ -1,0 +1,35 @@
+id: analysis.problem-tree
+persona: mary-analyst
+phase: analysis
+summary: Estruturar um Problem Tree com causas, impactos e métricas claras para orientar o time.
+inputs:
+  - key: product_brief
+    description: Resumo atual do produto/visão (pode ser um rascunho).
+  - key: interviews
+    description: Anotações de entrevistas recentes ou dores percebidas.
+steps:
+  - type: instruction
+    text: "Comece entendendo o objetivo estratégico do produto e seus usuários prioritários."
+  - type: question
+    prompt: Qual problema principal você quer resolver e para quem?
+  - type: question
+    prompt: Quais sintomas ou sinais mostram que esse problema é crítico hoje?
+  - type: question
+    prompt: Existem restrições ou métricas de sucesso (prazo, orçamento, metas de negócio) já definidas?
+  - type: instruction
+    text: "Agrupe sintomas por causa potencial e detalhe impactos de cada ramo."
+  - type: question
+    prompt: Qual causa-raiz parece mais arriscada ou nebulosa e por quê?
+  - type: tool
+    name: analysis.diff
+    params:
+      path: docs
+      pattern: 'product-brief.md'
+  - type: instruction
+    text: "Monte causas primárias/secundárias, hipóteses e métricas indicadoras para cada ramo."
+outputs:
+  - path: docs/problem-tree.md
+    description: Problem Tree documentado com hipóteses e métricas.
+checks:
+  - type: review
+    condition: Verificar se cada causa possui métrica, hipótese e ação sugerida.

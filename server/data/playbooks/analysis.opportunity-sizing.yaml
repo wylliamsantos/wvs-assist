@@ -1,0 +1,26 @@
+id: analysis.opportunity-sizing
+persona: mary-analyst
+phase: analysis
+summary: Estimar TAM/SAM/SOM e impacto potencial da oportunidade mapeada.
+inputs:
+  - key: problem_tree
+    description: docs/problem-tree.md
+  - key: market_data
+    description: Fonte de dados ou pesquisas relevantes.
+steps:
+  - type: instruction
+    text: "Liste segmentos de clientes afetados e volume atual."
+  - type: question
+    prompt: Quais premissas você está adotando para TAM/SAM/SOM?
+  - type: tool
+    name: research.rag
+    params:
+      query: "Estudos recentes sobre mercado e benchmarks"
+  - type: instruction
+    text: "Monte tabela TAM/SAM/SOM com justificativa e riscos."
+outputs:
+  - path: docs/opportunity-sizing.md
+    description: Documento de sizing com premissas/métricas.
+checks:
+  - type: review
+    condition: Validar premissas com stakeholders financeiros.

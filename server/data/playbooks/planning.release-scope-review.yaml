@@ -1,0 +1,27 @@
+id: planning.release-scope-review
+persona: john-pm
+phase: planning
+summary: Revisar escopo do release com stakeholders antes da implementação.
+inputs:
+  - key: prd
+    description: docs/PRD.md
+  - key: epics
+    description: docs/epics.md
+steps:
+  - type: instruction
+    text: "Liste objetivos do release e dependências críticas."
+  - type: question
+    prompt: Quais riscos ou bloqueios foram identificados nesta revisão?
+  - type: tool
+    name: planning.brief
+    params:
+      template: release-go-no-go
+  - type: handoff
+    target: mary-analyst
+    text: Validar se descobertas exigem retorno à fase de análise.
+outputs:
+  - path: docs/release-scope-review.md
+    description: Registro da revisão de escopo.
+checks:
+  - type: gate
+    condition: Aprovação explícita dos stakeholders críticos.

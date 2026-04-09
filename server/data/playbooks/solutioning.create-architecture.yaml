@@ -1,0 +1,37 @@
+id: solutioning.create-architecture
+persona: winston-architect
+phase: solutioning
+summary: Winston traduz o PRD em arquitetura escalável e resiliente.
+inputs:
+  -
+    key: tech_spec
+    description: docs/tech-spec.md
+  -
+    key: constraints
+    description: Limitações de plataforma e compliance
+steps:
+  -
+    type: instruction
+    text: Mapear domínios e limites de contexto.
+  -
+    type: instruction
+    text: Definir integrações críticas e contratos.
+  -
+    type: tool
+    name: diagram.generate
+    params:
+      kind: c4
+  -
+    type: question
+    prompt: Quais riscos técnicos precisam de mitigação?
+outputs:
+  -
+    path: docs/architecture.md
+    description: Documento de arquitetura
+  -
+    path: docs/ADRs/
+    description: Decisões registradas
+checks:
+  -
+    type: gate
+    condition: Architecture gate aprovado

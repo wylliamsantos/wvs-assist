@@ -1,0 +1,38 @@
+id: implementation.sprint-planning
+persona: bob-scrum
+phase: implementation
+summary: Bob orquestra planejamento e rastreia o sprint status.
+inputs:
+  -
+    key: backlog
+    description: Lista priorizada de histórias
+  -
+    key: capacity
+    description: Disponibilidade do time
+steps:
+  -
+    type: instruction
+    text: Selecionar épicos e stories candidatos.
+  -
+    type: instruction
+    text: Definir DoD e riscos por story.
+  -
+    type: tool
+    name: generate.status-yaml
+    params:
+      path: docs/sprint-status.yaml
+  -
+    type: handoff
+    target: amelia-dev
+    text: Confirmar prontidão técnica.
+outputs:
+  -
+    path: docs/sprint-status.yaml
+    description: Visão do sprint
+  -
+    path: docs/stories/
+    description: Stories atualizadas
+checks:
+  -
+    type: gate
+    condition: Squad aprova o plano

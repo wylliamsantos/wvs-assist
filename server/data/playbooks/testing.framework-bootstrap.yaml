@@ -1,0 +1,43 @@
+id: testing.framework-bootstrap
+persona: murat-qa
+phase: testing
+summary: Murat prepara o stack de QA e garante rastreabilidade.
+inputs:
+  -
+    key: repo_path
+    description: Monorepo principal
+  -
+    key: nfr_targets
+    description: Requisitos não-funcionais
+steps:
+  -
+    type: instruction
+    text: Escolher frameworks e libs alinhados ao projeto.
+  -
+    type: question
+    prompt: Qual é o quality gate mínimo aceitável?
+  -
+    type: instruction
+    text: Mapear suites de regressão e smoke obrigatórias.
+  -
+    type: question
+    prompt: Quais ambientes (dev/stage/prod) precisam de cobertura automatizada?
+  -
+    type: tool
+    name: ci.scaffold
+    params:
+      provider: github
+  -
+    type: instruction
+    text: Configurar testes ATDD e automação de smoke.
+outputs:
+  -
+    path: tests/
+    description: Suites automatizadas
+  -
+    path: docs/quality-gate.md
+    description: Critérios e métricas
+checks:
+  -
+    type: gate
+    condition: Quality gate aprovado pelos stakeholders

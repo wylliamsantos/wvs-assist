@@ -1,0 +1,29 @@
+id: implementation.refactor-scout
+persona: amelia-dev
+phase: implementation
+summary: Amelia identifica dívidas técnicas prioritárias e quick wins de refatoração.
+inputs:
+  - key: code_hotspots
+    description: Relatório de hotspots (git churn, bugs)
+  - key: architecture_links
+    description: Trechos críticos definidos por Winston
+steps:
+  - type: instruction
+    text: Correlacionar hotspots com riscos do PRD/arquitetura.
+  - type: question
+    prompt: Qual módulo terá maior retorno se refatorado agora?
+  - type: tool
+    name: repo.metrics
+    params:
+      metric: complexity
+      top: 5
+  - type: instruction
+    text: Especificar escopo, guardrails e teste mínimo por refatoração.
+outputs:
+  - path: docs/refactor-scout.md
+    description: Lista priorizada de refactors com esforço/benefício
+  - path: docs/refactor-checklist.md
+    description: Checklist operacional para execução segura
+checks:
+  - type: gate
+    condition: Arquitetura valida riscos e rollbacks

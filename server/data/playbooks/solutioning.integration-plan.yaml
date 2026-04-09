@@ -1,0 +1,32 @@
+id: solutioning.integration-plan
+persona: winston-architect
+phase: solutioning
+summary: Winston prepara o plano de integração técnica com sistemas parceiros.
+inputs:
+  - key: interface_contracts
+    description: Contratos existentes (OpenAPI, AsyncAPI, gRPC)
+  - key: dependency_map
+    description: Lista de dependências externas e janelas de mudança
+steps:
+  - type: instruction
+    text: Mapear fluxos ponta-a-ponta e pontos únicos de falha.
+  - type: question
+    prompt: Alguma dependência externa possui janela de manutenção crítica?
+  - type: tool
+    name: repo.search
+    params:
+      query: integration
+      path: src
+  - type: instruction
+    text: Definir milestones, owners e validações por integração.
+  - type: handoff
+    target: bob-scrum
+    text: Alinhar cronograma das integrações com o plano de sprint.
+outputs:
+  - path: docs/integration-plan.md
+    description: Plano detalhado de integrações e milestones
+  - path: docs/risks-register.md
+    description: Registro de riscos técnicos por integração
+checks:
+  - type: review
+    condition: Parceiros técnicos aprovam datas e contratos

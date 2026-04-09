@@ -1,0 +1,27 @@
+id: planning.design-system-diff
+persona: sally-ux
+phase: planning
+summary: Comparar o design system atual com as necessidades do release.
+inputs:
+  - key: ux_spec
+    description: docs/ux-spec.md
+  - key: design_system
+    description: tokens ou componentes atuais.
+steps:
+  - type: instruction
+    text: "Mapeie componentes necessários vs. existentes."
+  - type: tool
+    name: design.compare
+    params:
+      from: tokens/current.json
+      to: ux-spec.md
+  - type: question
+    prompt: Quais componentes novos ou revisões são obrigatórios?
+  - type: instruction
+    text: "Documente gaps e prioridades por impacto."
+outputs:
+  - path: docs/design-system-diff.md
+    description: Relatório de gaps do design system.
+checks:
+  - type: review
+    condition: Aprovação do time de design system.

@@ -1,0 +1,37 @@
+id: implementation.develop-story
+persona: amelia-dev
+phase: implementation
+summary: Amelia executa stories aprovadas com foco em DoD.
+inputs:
+  -
+    key: story_context
+    description: "Arquivo {story}.context.xml"
+  -
+    key: repo_path
+    description: Diretório do código
+steps:
+  -
+    type: instruction
+    text: Ler contexto completo e critérios de aceitação.
+  -
+    type: tool
+    name: git.status
+    params:
+      path: repo
+  -
+    type: instruction
+    text: Implementar mudanças citando caminhos/ACIDs.
+  -
+    type: question
+    prompt: DoD atendido?
+outputs:
+  -
+    path: PR
+    description: Pull request pronto para review
+  -
+    path: "docs/stories/{story}.md"
+    description: Story atualizada
+checks:
+  -
+    type: review
+    condition: Code review aprovado

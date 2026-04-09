@@ -1,0 +1,37 @@
+id: planning.create-design
+persona: sally-ux
+phase: planning
+summary: Sally valida hipóteses com protótipos navegáveis e critérios UX.
+inputs:
+  -
+    key: prd
+    description: docs/PRD.md
+  -
+    key: user_personas
+    description: Personas alvo
+steps:
+  -
+    type: workshop
+    text: Realizar mini design sprint com stakeholders.
+  -
+    type: instruction
+    text: Criar fluxos principais em wireframes.
+  -
+    type: question
+    prompt: Quais riscos de usabilidade precisam de teste?
+  -
+    type: tool
+    name: generate.prototype
+    params:
+      fidelity: medium
+outputs:
+  -
+    path: docs/ux-spec.md
+    description: Especificação UX
+  -
+    path: assets/wireframes
+    description: Wireframes exportados
+checks:
+  -
+    type: gate
+    condition: Equipe concorda com fluxos finais

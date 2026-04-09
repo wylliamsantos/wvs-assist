@@ -1,0 +1,28 @@
+id: implementation.dev-digest
+persona: amelia-dev
+phase: implementation
+summary: Amelia gera um digest técnico diário para stakeholders.
+inputs:
+  - key: merge_log
+    description: Lista de PRs/commits merged na sprint
+  - key: blockers
+    description: Issues abertas bloqueando progresso
+steps:
+  - type: instruction
+    text: Agrupar mudanças por épico/story e destacar impactos no usuário.
+  - type: tool
+    name: repo.changelog
+    params:
+      range: HEAD~20..HEAD
+  - type: question
+    prompt: Qual alerta deve chegar primeiro ao PM/QA?
+  - type: instruction
+    text: Gerar resumo com status, riscos e próximos passos.
+outputs:
+  - path: docs/dev-digest.md
+    description: Digest diário/semanal para stakeholders
+  - path: docs/change-radar.md
+    description: Radar de mudanças críticas e seus donos
+checks:
+  - type: review
+    condition: PM confirma entendimento das mudanças chave

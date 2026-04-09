@@ -1,0 +1,26 @@
+id: planning.user-feedback-sprint
+persona: sally-ux
+phase: planning
+summary: Rodada rápida de entrevistas e feedback com usuários representativos.
+inputs:
+  - key: ux_spec
+    description: docs/ux-spec.md
+  - key: interviewees
+    description: Lista de usuários ou clientes disponíveis.
+steps:
+  - type: instruction
+    text: "Defina roteiro de perguntas focado no protótipo atual."
+  - type: question
+    prompt: Quais necessidades ou dores se repetem nas entrevistas?
+  - type: tool
+    name: research.rag
+    params:
+      query: "Notas de feedback anteriores"
+  - type: instruction
+    text: "Resuma achados, recomendações e próximos passos."
+outputs:
+  - path: docs/user-feedback-sprint.md
+    description: Sumário do sprint de entrevistas.
+checks:
+  - type: review
+    condition: Validar com o time de produto e priorizar follow-ups.

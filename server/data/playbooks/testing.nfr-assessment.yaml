@@ -1,0 +1,31 @@
+id: testing.nfr-assessment
+persona: murat-qa
+phase: testing
+summary: Murat traduz requisitos não-funcionais em cenários de teste mensuráveis.
+inputs:
+  - key: nfr_matrix
+    description: docs/nfr-matrix.md aprovado pela arquitetura
+  - key: observability_plan
+    description: docs/observability-plan.md
+steps:
+  - type: instruction
+    text: Derivar cenários de teste e SLIs monitorados por requisito.
+  - type: question
+    prompt: Há alguma métrica sem fonte confiável de dados?
+  - type: tool
+    name: test.scaffold
+    params:
+      kind: k6
+  - type: instruction
+    text: Definir critérios de aceitação, volume e ferramentas por cenário.
+  - type: handoff
+    target: winston-architect
+    text: Validar limites e métricas antes de executar testes de carga.
+outputs:
+  - path: docs/nfr-test-plan.md
+    description: Plano de testes não-funcionais
+  - path: docs/perf-observations.md
+    description: Registro de métricas coletadas e alertas configurados
+checks:
+  - type: gate
+    condition: Todos os SLIs têm testes e owners definidos

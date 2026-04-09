@@ -1,0 +1,28 @@
+id: implementation.sprint-retro
+persona: bob-scrum
+phase: implementation
+summary: Bob conduz retrospectiva com foco em fluxo e qualidade técnica.
+inputs:
+  - key: sprint_status
+    description: docs/sprint-status.yaml com métricas de throughput
+  - key: incidents
+    description: Logs de incidentes/alertas da sprint
+steps:
+  - type: instruction
+    text: Revisar métricas (lead time, spillover, bugs) e destacar outliers.
+  - type: question
+    prompt: Qual melhoria de processo traria maior impacto imediato?
+  - type: tool
+    name: timeline.plot
+    params:
+      source: logs/incidents.json
+  - type: instruction
+    text: Dividir insights em Start/Stop/Continue com donos e datas.
+outputs:
+  - path: docs/sprint-retro.md
+    description: Ata da retrospectiva com ações priorizadas
+  - path: docs/process-experiments.md
+    description: Experimentos aprovados e métricas de sucesso
+checks:
+  - type: review
+    condition: Time concorda com owners e prazos das ações

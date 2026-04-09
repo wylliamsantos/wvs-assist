@@ -1,0 +1,37 @@
+id: documentation.document-project
+persona: paige-writer
+phase: documentation
+summary: Paige transforma conhecimento disperso em documentação navegável.
+inputs:
+  -
+    key: repo_path
+    description: Repositório com código
+  -
+    key: stakeholder_notes
+    description: Notas do time
+steps:
+  -
+    type: instruction
+    text: Mapear módulos principais e fluxos de dados.
+  -
+    type: tool
+    name: docs.generate
+    params:
+      format: commonmark
+  -
+    type: instruction
+    text: "Criar tabelas de APIs, modelos e depend\u00eancias."
+  -
+    type: question
+    prompt: Quais lacunas precisam de entrevistas?
+outputs:
+  -
+    path: docs/index.md
+    description: Visão geral do sistema
+  -
+    path: docs/api-contracts.md
+    description: APIs documentadas
+checks:
+  -
+    type: review
+    condition: Equipe técnica revisou e aprovou
