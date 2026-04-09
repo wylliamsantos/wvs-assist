@@ -148,6 +148,7 @@ export const App = () => {
   const [transcriptOffsets, setTranscriptOffsets] = useState<Record<string, number>>({});
   const [spinnerFrame, setSpinnerFrame] = useState(0);
   const [focusTarget, setFocusTarget] = useState<'menu' | 'content'>('menu');
+  const [homeMode, setHomeMode] = useState<'guided' | 'expert'>('guided');
 
   const answeredQuestionsRef = useRef(new Set<string>());
   const runMapRef = useRef(new Map<string, string>());
@@ -223,7 +224,7 @@ export const App = () => {
   // mantém foco inicial no menu; usuário alterna com Tab/Setas
 
   const startWorkflow = useCallback(
-    (agentId: string, workflowId: string, note?: string) => {
+    (agentId: string, workflowId: string, runMode: 'guided' | 'expert' = 'guided', note?: string) => {
       if (!catalog) {
         setActionMessage('Catálogo não carregado ainda.');
         return null;
@@ -245,6 +246,8 @@ export const App = () => {
         agentId: agent.id,
         agentName: agent.displayName,
         workflow: workflowId,
+        phase: inferPhaseFromWorkflow(workflowId),
+        runMode,
         status: 'drafted',
         startedAt: now,
         updatedAt: now,
@@ -259,11 +262,12 @@ export const App = () => {
         workflowId,
         persona: agent.id,
         sessionId,
+        runMode,
         input: note ?? `Fluxo ${workflowId} iniciado via console para ${agent.displayName}.`,
       });
       runMapRef.current.set(runId, sessionId);
       setActionMessage(
-        `Sessão ${sessionId} • ${workflowId} (${sent ? 'workflow enviado' : 'aguardando MCP'})`
+        `Sessão ${sessionId} • ${workflowId} • modo ${runMode} (${sent ? 'workflow enviado' : 'aguardando MCP'})`
       );
       return sessionId;
     },
@@ -558,6 +562,10 @@ export const App = () => {
 
     if (selectedScreen === 'home') {
       if (focusTarget !== 'content') return;
+      if (key.leftArrow || key.rightArrow) {
+        setHomeMode(prev => (prev === 'guided' ? 'expert' : 'guided'));
+        return;
+      }
       if (key.upArrow) {
         setHomeCursor(prev => (prev - 1 + guidedFlow.length) % guidedFlow.length);
         return;
@@ -567,7 +575,7 @@ export const App = () => {
         return;
       }
       if (key.return) {
-        handleGuidedSelection();
+        handleHomeSelection();
         return;
       }
     }
@@ -607,33 +615,49 @@ export const App = () => {
     });
   }, [agentMap, workflowSessions]);
 
-  const handleGuidedSelection = useCallback(() => {
+  const handleHomeSelection = useCallback(() => {
     const state = guidedStates[homeCursor];
     if (!state) return;
-    if (state.status === 'locked') {
-      setActionMessage('Conclua a etapa anterior antes de seguir.');
-      return;
-    }
-    if (state.session) {
-      setActiveSessionId(state.session.id);
-      if (sessionsMenuIndex >= 0) {
-        setMenuIndex(sessionsMenuIndex);
-        setFocusTarget('content');
+
+    if (homeMode === 'guided') {
+      if (state.status === 'locked') {
+        setActionMessage('Conclua a etapa anterior antes de seguir.');
+        return;
+      }
+      if (state.session) {
+        setActiveSessionId(state.session.id);
+        if (sessionsMenuIndex >= 0) {
+          setMenuIndex(sessionsMenuIndex);
+          setFocusTarget('content');
+        }
+        return;
+      }
+      if (state.status === 'ready') {
+        const created = startWorkflow(
+          state.step.agentId,
+          state.step.workflowId,
+          'guided',
+          `Fluxo guiado (${state.step.label}) disparado.`
+        );
+        if (created && sessionsMenuIndex >= 0) {
+          setMenuIndex(sessionsMenuIndex);
+          setFocusTarget('content');
+        }
       }
       return;
     }
-    if (state.status === 'ready') {
-      const created = startWorkflow(
-        state.step.agentId,
-        state.step.workflowId,
-        `Fluxo guiado (${state.step.label}) disparado.`
-      );
-      if (created && sessionsMenuIndex >= 0) {
-        setMenuIndex(sessionsMenuIndex);
-        setFocusTarget('content');
-      }
+
+    const created = startWorkflow(
+      state.step.agentId,
+      state.step.workflowId,
+      'expert',
+      `Consulta especializada (${state.step.label}) iniciada.`
+    );
+    if (created && sessionsMenuIndex >= 0) {
+      setMenuIndex(sessionsMenuIndex);
+      setFocusTarget('content');
     }
-  }, [guidedStates, homeCursor, startWorkflow]);
+  }, [guidedStates, homeCursor, homeMode, startWorkflow]);
 
   const sidebar = (
     <Box
@@ -675,7 +699,7 @@ export const App = () => {
         ↑/↓ menu • Tab/→ foca conteúdo • ← volta • Esc/Q volta ao menu • Ctrl+C sai
       </Text>
       {selectedScreen === 'home' && focusTarget === 'content' && (
-        <Text dimColor>↑/↓ percorrem fases • Enter inicia/abre sessão guiada</Text>
+        <Text dimColor>←/→ alterna modo (guided/expert) • ↑/↓ fases • Enter executar</Text>
       )}
       {selectedScreen === 'agents' && focusTarget === 'content' && (
         <Text dimColor>Use ↑/↓ para agente e ←/→ para workflow • Enter inicia</Text>
@@ -698,6 +722,7 @@ export const App = () => {
           steps={guidedStates}
           cursor={homeCursor}
           focusTarget={focusTarget}
+          homeMode={homeMode}
         />
       )}
       {selectedScreen === 'agents' && (
@@ -876,7 +901,7 @@ const SessionsView = ({
               {session.agentName}
             </Text>
             <Text color="gray">{session.workflow}</Text>
-            <Text color={colorForStatus(session.status)}>Status: {session.status}</Text>
+            <Text color={colorForStatus(session.status)}>Status: {session.status} • modo: {session.runMode ?? 'guided'}</Text>
           </Box>
         ))}
       </Box>
@@ -997,13 +1022,17 @@ type HomeViewProps = {
   steps: GuidedState[];
   cursor: number;
   focusTarget: 'menu' | 'content';
+  homeMode: 'guided' | 'expert';
 };
 
-const HomeView = ({catalogLoaded, steps, cursor, focusTarget}: HomeViewProps) => (
+const HomeView = ({catalogLoaded, steps, cursor, focusTarget, homeMode}: HomeViewProps) => (
   <Box flexDirection="column">
     <Text color="magenta">BMAD Orchestrator</Text>
     <Text>
       Inicie um projeto do zero passando por cada fase recomendada: análise → planejamento → arquitetura → execução → QA → documentação.
+    </Text>
+    <Text color={homeMode === 'guided' ? 'cyan' : 'yellow'}>
+      Modo atual: {homeMode === 'guided' ? 'Jornada Completa (com gates)' : 'Consulta Especialista (atalho sem gate)'}
     </Text>
     <Text color={catalogLoaded ? 'green' : 'yellow'}>
       Catálogo {catalogLoaded ? 'pronto' : 'carregando...'} — escolha a próxima etapa com ↑/↓ e Enter.
@@ -1019,7 +1048,7 @@ const HomeView = ({catalogLoaded, steps, cursor, focusTarget}: HomeViewProps) =>
             </Text>
             <Text color="gray">
               {state.step.description}
-              {state.status === 'locked' && ' (aguarde etapa anterior)'}
+              {state.status === 'locked' && homeMode === 'guided' && ' (aguarde etapa anterior)'}
             </Text>
             <Text color="gray">Status: {guidedStatusLabel(state.status)}</Text>
             <Text> </Text>
@@ -1186,6 +1215,14 @@ function formatArtifactEntry(artifact: { path: string; description?: string; pre
   const base = `Artefato pronto: ${artifact.path}${artifact.description ? ` — ${artifact.description}` : ''}`;
   if (!artifact.preview) return base;
   return `${base}\nResumo: ${artifact.preview}`;
+}
+
+function inferPhaseFromWorkflow(workflowId: string): string {
+  const prefix = workflowId.split('.')[0];
+  if (['analysis', 'planning', 'solutioning', 'implementation', 'testing', 'documentation'].includes(prefix)) {
+    return prefix;
+  }
+  return 'analysis';
 }
 
 function truncate(text: string, size: number): string {

@@ -20,7 +20,12 @@ export function useSessions(apiBase: string | null) {
       const res = await fetch(`${apiBase}/sessions`);
       if (!res.ok) throw new Error(`sessions ${res.status}`);
       const data = (await res.json()) as SessionsResponse;
-      setSessions(data.sessions ?? []);
+      const normalized = (data.sessions ?? []).map(session => ({
+        ...session,
+        phase: session.phase ?? session.workflow.split('.')[0] ?? 'analysis',
+        runMode: session.runMode ?? 'guided',
+      }));
+      setSessions(normalized);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
