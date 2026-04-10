@@ -263,6 +263,11 @@ function connect() {
         if (step) {
           guidedCompletedPhases.add(step.phase);
           add(agentLine(step.persona, `concluí ${step.label}.`));
+          const generated = guidedArtifactsByWorkflow.get(String(m.workflowId ?? '')) ?? [];
+          const userVisibleArtifacts = generated.filter((p) => p !== 'summary.md').slice(0, 4);
+          if (userVisibleArtifacts.length > 0) {
+            add(agentLine(step.persona, `gerei estes arquivos: ${userVisibleArtifacts.join(', ')}.`));
+          }
         }
 
         const next = nextAfterWorkflow(String(m.workflowId ?? ''));
