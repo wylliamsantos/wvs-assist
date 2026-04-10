@@ -399,14 +399,16 @@ async function handleWorkflowRun(ws: ServerWebSocket<any>, payload: any) {
           })
         );
 
-        await maybeAskAdaptiveAfterAnswer(ws, {
-          runId,
-          workflowId,
-          sessionId,
-          playbook,
-          qnaContext,
-          suffix: `after:${index}`
-        });
+        if (playbook.phase === "analysis") {
+          await maybeAskAdaptiveAfterAnswer(ws, {
+            runId,
+            workflowId,
+            sessionId,
+            playbook,
+            qnaContext,
+            suffix: `after:${index}`
+          });
+        }
         continue;
       }
 
@@ -423,13 +425,15 @@ async function handleWorkflowRun(ws: ServerWebSocket<any>, payload: any) {
       );
     }
 
-    await runAdaptiveQuestions(ws, {
-      runId,
-      workflowId,
-      sessionId,
-      playbook,
-      qnaContext
-    });
+    if (playbook.phase === "analysis") {
+      await runAdaptiveQuestions(ws, {
+        runId,
+        workflowId,
+        sessionId,
+        playbook,
+        qnaContext
+      });
+    }
 
     ws.send(JSON.stringify({ id: runId, type: "workflow.run.pending", workflowId, sessionId, stage: "llm" }));
     const llmOutput = await runWorkflowLLM(playbook, payload?.input, qnaContext);
@@ -630,6 +634,7 @@ async function generateFollowupQuestion(
     'Estilo da pergunta: humano, claro e acolhedor (tom conversa, sem jargão técnico).',
     'Retorne JSON no formato {"ask": true/false, "question": "texto", "allowMore": true/false, "reason": "por que esta pergunta ajuda"}.',
     'Pergunte apenas se faltarem detalhes essenciais (problema, público, impacto, restrições, metas).',
+    'Nunca repita perguntas já respondidas e mantenha coerência com a fase atual.',
     'Se estiver satisfeito com o contexto atual, responda {"ask": false}.',
     '',
     'Histórico coletado:'
