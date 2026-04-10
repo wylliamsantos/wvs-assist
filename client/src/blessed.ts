@@ -57,6 +57,7 @@ let workflows: WorkflowSummary[] = [];
 let expertCards: ExpertCard[] = [];
 let sessions: SessionRecord[] = [];
 let lines: string[] = ['⚙️ WVS Orbit pronto.'];
+let guidedCompletedPhases = new Set<string>();
 
 const sanitize = (line: string) => line.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
 const add = (line: string) => {
@@ -74,7 +75,7 @@ function avatar(persona: string) {
 
 function nextStep() {
   for (const s of GUIDED_FLOW) {
-    const done = sessions.some((x) => x.runMode === 'guided' && x.phase === s.phase && x.status === 'done');
+    const done = guidedCompletedPhases.has(s.phase);
     if (!done) return s;
   }
   return null;
@@ -87,7 +88,7 @@ function renderHeader() {
 }
 
 function renderJourney() {
-  const done = GUIDED_FLOW.filter((s) => sessions.some((x) => x.runMode === 'guided' && x.phase === s.phase && x.status === 'done')).length;
+  const done = GUIDED_FLOW.filter((s) => guidedCompletedPhases.has(s.phase)).length;
   const width = 20;
   const fill = Math.round((done / GUIDED_FLOW.length) * width);
   const bar = `[${'█'.repeat(fill)}${'░'.repeat(width - fill)}] ${Math.round((done / GUIDED_FLOW.length) * 100)}%`;
@@ -230,6 +231,8 @@ function connect() {
       if (m.type === 'workflow.run.completed') {
         processing = false;
         pendingQuestionId = null;
+        const step = GUIDED_FLOW.find((x) => x.workflowId === m.workflowId);
+        if (step) guidedCompletedPhases.add(step.phase);
         add(`⚙️ Etapa concluída: ${m.workflowId}`);
         void refreshData();
       }
@@ -240,7 +243,7 @@ function connect() {
 
 input.on('submit', (v) => {
   const answer = String(v ?? '').trim();
-  if (!pendingQuestionId || !ws || ws.readyState !== WebSocket.OPEN) {
+  if (!pendingQuestionId) {
     setSys('sem pergunta pendente para responder');
     return;
   }
@@ -250,8 +253,24 @@ input.on('submit', (v) => {
     screen.render();
     return;
   }
+
+  add(`${USE_EMOJI ? '🧑' : '[U]'} Você: ${answer}`);
+
+  if (pendingQuestionId === 'local:idea') {
+    pendingQuestionId = null;
+    input.setValue('');
+    const step = nextStep();
+    if (step) sendRun(step.workflowId, 'guided');
+    renderAll();
+    return;
+  }
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    setSys('MCP offline para enviar resposta');
+    return;
+  }
+
   ws.send(JSON.stringify({ type: 'workflow.answer', questionId: pendingQuestionId, answer }));
-  add(`🧑 Você: ${answer}`);
   pendingQuestionId = null;
   input.setValue('');
   renderAll();
@@ -280,7 +299,11 @@ screen.key(['enter'], () => {
 
   if (screenMode === 'home') {
     screenMode = homeSelected === 0 ? 'guided' : 'expert';
-    if (screenMode === 'guided') add(`${avatar('Mary — Business Analyst')} Mary: me conta sua ideia e o problema que você quer resolver.`);
+    if (screenMode === 'guided') {
+      guidedCompletedPhases = new Set<string>();
+      add(`${avatar('Mary — Business Analyst')} Mary: me conta sua ideia e o problema que você quer resolver.`);
+      pendingQuestionId = 'local:idea';
+    }
     renderAll();
     return;
   }
