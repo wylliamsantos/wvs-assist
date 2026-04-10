@@ -57,6 +57,8 @@ let expertCards: ExpertCard[] = [];
 let sessions: SessionRecord[] = [];
 let lines: string[] = [];
 let guidedCompletedPhases = new Set<string>();
+let currentRunQuestionCount = 0;
+let queuedNextWorkflowId: string | null = null;
 
 const sanitize = (line: string) => line.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
 const add = (line: string) => {
@@ -152,18 +154,21 @@ function renderMain() {
   main.setLabel(' Guided ');
   main.setContent([
     step ? `{bold}${firstName(step.persona)} — ${step.label}{/bold}` : '{green-fg}Jornada concluída{/green-fg}',
-    processing ? 'Agente processando... aguarde' : 'Pressione Enter para avançar etapa',
+    processing ? '{yellow-fg}Aguarde — agente processando...{/yellow-fg}' : 'Fluxo guiado em andamento',
     '',
     ...convoBlock(14)
   ].join('\n'));
 
   if (pendingQuestionId) {
-    inputHint.setContent('Responda e pressione Enter');
+    inputHint.setContent('{green-fg}Sua resposta é necessária — digite e pressione Enter{/green-fg}');
     input.show();
     input.focus();
     input.readInput();
+  } else if (processing) {
+    inputHint.setContent('{yellow-fg}Aguarde — o agente está preparando a próxima interação{/yellow-fg}');
+    input.hide();
   } else {
-    inputHint.setContent('Enter avança etapa | h home');
+    inputHint.setContent('h home');
     input.hide();
   }
 }
@@ -220,6 +225,7 @@ function connect() {
     try {
       const m = JSON.parse(String(ev.data));
       if (m.type === 'workflow.run.started') {
+        currentRunQuestionCount = 0;
         const step = GUIDED_FLOW.find((x) => x.workflowId === m.workflowId);
         if (step && m.runMode === 'guided') {
           add(agentLine(step.persona, `oi! Eu vou conduzir a etapa ${step.label}.`));
@@ -227,6 +233,7 @@ function connect() {
         }
       }
       if (m.type === 'workflow.question') {
+        currentRunQuestionCount += 1;
         pendingQuestionId = m.questionId;
         const step = GUIDED_FLOW.find((x) => x.workflowId === processingLabel);
         const who = step ? step.persona : 'Agente';
@@ -253,8 +260,15 @@ function connect() {
         }
 
         const next = nextAfterWorkflow(String(m.workflowId ?? ''));
-        if (next) {
+
+        if (next && currentRunQuestionCount === 0 && step) {
+          queuedNextWorkflowId = next.workflowId;
+          pendingQuestionId = `local:checkpoint:${step.phase}`;
+          add(agentLine(step.persona, 'antes de seguirmos, me confirma em 1 frase se esta etapa ficou alinhada com o que você esperava.'));
+          add(agentLine(next.persona, `assim que você confirmar, eu assumo ${next.label}.`));
+        } else if (next) {
           add(agentLine(next.persona, `recebi o contexto e vou assumir ${next.label}.`));
+          sendRun(next.workflowId, 'guided');
         } else {
           add('{green-fg}Parabéns! Finalizamos a jornada guided.{/green-fg}');
         }
@@ -285,6 +299,16 @@ input.on('submit', (v) => {
     input.setValue('');
     const step = nextStep();
     if (step) sendRun(step.workflowId, 'guided');
+    renderAll();
+    return;
+  }
+
+  if (pendingQuestionId.startsWith('local:checkpoint:')) {
+    pendingQuestionId = null;
+    input.setValue('');
+    const nextWorkflowId = queuedNextWorkflowId;
+    queuedNextWorkflowId = null;
+    if (nextWorkflowId) sendRun(nextWorkflowId, 'guided');
     renderAll();
     return;
   }
