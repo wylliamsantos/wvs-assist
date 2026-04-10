@@ -59,6 +59,7 @@ let lines: string[] = [];
 let guidedCompletedPhases = new Set<string>();
 let currentRunQuestionCount = 0;
 let queuedNextWorkflowId: string | null = null;
+let guidedArtifactsByWorkflow = new Map<string, string[]>();
 
 const sanitize = (line: string) => line.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
 const add = (line: string) => {
@@ -200,8 +201,11 @@ function sendRun(workflowId: string, mode: Mode) {
   processingLabel = workflowId;
   const contextSnippet = lines.slice(-10).join(' | ');
   const step = GUIDED_FLOW.find((s) => s.workflowId === workflowId);
+  const artifactContext = [...guidedArtifactsByWorkflow.entries()]
+    .map(([wf, files]) => `${wf}: ${files.join(', ')}`)
+    .join(' | ');
   const contextualInput = mode === 'guided'
-    ? `Contexto da jornada: ${contextSnippet}. Etapa atual: ${step?.label ?? workflowId}.`
+    ? `Contexto da jornada: ${contextSnippet}. Etapa atual: ${step?.label ?? workflowId}. Artefatos já gerados: ${artifactContext || 'nenhum ainda'}. Use esses artefatos como base para a próxima etapa.`
     : `Consulta especialista com contexto: ${contextSnippet}`;
 
   ws.send(JSON.stringify({
@@ -240,7 +244,9 @@ function connect() {
         add(agentLine(who, m.prompt));
       }
       if (m.type === 'workflow.artifact' && m.artifact?.path) {
-        // sem mensagens de sistema no chat
+        const workflowId = String(m.workflowId ?? processingLabel ?? 'unknown');
+        const existing = guidedArtifactsByWorkflow.get(workflowId) ?? [];
+        guidedArtifactsByWorkflow.set(workflowId, [...existing, String(m.artifact.path)]);
       }
       if (m.type === 'workflow.run.output' && m.output) {
         // sem mensagens de sistema no chat
@@ -349,6 +355,7 @@ screen.key(['enter'], () => {
     screenMode = homeSelected === 0 ? 'guided' : 'expert';
     if (screenMode === 'guided') {
       guidedCompletedPhases = new Set<string>();
+      guidedArtifactsByWorkflow = new Map<string, string[]>();
       add(agentLine('Mary — Business Analyst', 'oi! Eu vou conduzir a descoberta inicial do seu projeto.'));
       add(agentLine('Mary — Business Analyst', 'vou começar entendendo sua ideia, problema e contexto de negócio.'));
       add(agentLine('Mary — Business Analyst', 'me conta sua ideia e o principal problema que você quer resolver.'));
