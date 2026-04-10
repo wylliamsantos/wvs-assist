@@ -81,6 +81,12 @@ function nextStep() {
   return null;
 }
 
+function nextAfterWorkflow(workflowId: string) {
+  const idx = GUIDED_FLOW.findIndex((s) => s.workflowId === workflowId);
+  if (idx < 0 || idx + 1 >= GUIDED_FLOW.length) return null;
+  return GUIDED_FLOW[idx + 1];
+}
+
 function renderHeader() {
   const m = screenMode.toUpperCase();
   const p = processing ? ` | PROCESSANDO: ${processingLabel}` : '';
@@ -92,7 +98,11 @@ function renderJourney() {
   const width = 20;
   const fill = Math.round((done / GUIDED_FLOW.length) * width);
   const bar = `[${'█'.repeat(fill)}${'░'.repeat(width - fill)}] ${Math.round((done / GUIDED_FLOW.length) * 100)}%`;
-  journey.setContent(`Progresso: ${bar}\n${GUIDED_FLOW.map((s) => s.label).join('  •  ')}`);
+  const stages = GUIDED_FLOW.map((s) => {
+    if (guidedCompletedPhases.has(s.phase)) return `{green-fg}✔ ${s.label}{/green-fg}`;
+    return `• ${s.label}`;
+  }).join('  ');
+  journey.setContent(`Progresso: ${bar}\n${stages}`);
 }
 
 function wrapLine(line: string, width = 120) {
@@ -223,6 +233,13 @@ function connect() {
         const who = step ? `${avatar(step.persona)} ${firstName(step.persona)}` : '🤖 Agente';
         add(`${who}: ${m.prompt}`);
       }
+      if (m.type === 'workflow.artifact' && m.artifact?.path) {
+        add(`📄 Artefato gerado: ${m.artifact.path}`);
+      }
+      if (m.type === 'workflow.run.output' && m.output) {
+        const out = String(m.output).replace(/\s+/g, ' ').slice(0, 220);
+        add(`📝 Saída: ${out}`);
+      }
       if (m.type === 'workflow.run.error') {
         processing = false;
         pendingQuestionId = null;
@@ -233,7 +250,14 @@ function connect() {
         pendingQuestionId = null;
         const step = GUIDED_FLOW.find((x) => x.workflowId === m.workflowId);
         if (step) guidedCompletedPhases.add(step.phase);
-        add(`⚙️ Etapa concluída: ${m.workflowId}`);
+        add(`✅ Etapa concluída: ${m.workflowId}`);
+
+        const next = nextAfterWorkflow(String(m.workflowId ?? ''));
+        if (next) {
+          add(`➡️ Passando para ${firstName(next.persona)} (${next.label}).`);
+        } else {
+          add('🏁 Jornada finalizada.');
+        }
         void refreshData();
       }
     } catch {}
