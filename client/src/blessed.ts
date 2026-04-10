@@ -55,7 +55,7 @@ let pendingQuestionId: string | null = null;
 let workflows: WorkflowSummary[] = [];
 let expertCards: ExpertCard[] = [];
 let sessions: SessionRecord[] = [];
-let lines: string[] = ['⚙️ WVS Orbit pronto.'];
+let lines: string[] = [];
 let guidedCompletedPhases = new Set<string>();
 
 const sanitize = (line: string) => line.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -68,7 +68,6 @@ const setSys = (line: string) => { sys.setContent(`⚙ ${line}`); };
 function firstName(persona: string) { return persona.split('—')[0]?.trim() || persona; }
 function agentLine(persona: string, text: string) { return `{cyan-fg}${firstName(persona)} — ${text}{/cyan-fg}`; }
 function userLine(text: string) { return `{green-fg}Você — ${text}{/green-fg}`; }
-function systemLine(text: string) { return `{gray-fg}Sistema — ${text}{/gray-fg}`; }
 
 function nextStep() {
   for (const s of GUIDED_FLOW) {
@@ -208,7 +207,7 @@ function sendRun(workflowId: string, mode: Mode) {
     runMode: mode,
     input: contextualInput
   }));
-  add(systemLine(`Execução iniciada: ${workflowId}`));
+  // execução iniciada (silencioso no chat para manter conversa humana)
   renderAll();
 }
 
@@ -222,7 +221,10 @@ function connect() {
       const m = JSON.parse(String(ev.data));
       if (m.type === 'workflow.run.started') {
         const step = GUIDED_FLOW.find((x) => x.workflowId === m.workflowId);
-        if (step && m.runMode === 'guided') add(agentLine(step.persona, `vamos começar ${step.label}.`));
+        if (step && m.runMode === 'guided') {
+          add(agentLine(step.persona, `oi! Eu vou conduzir a etapa ${step.label}.`));
+          add(agentLine(step.persona, `vou te fazer perguntas objetivas sobre este tema para seguirmos com qualidade.`));
+        }
       }
       if (m.type === 'workflow.question') {
         pendingQuestionId = m.questionId;
@@ -231,29 +233,30 @@ function connect() {
         add(agentLine(who, m.prompt));
       }
       if (m.type === 'workflow.artifact' && m.artifact?.path) {
-        add(systemLine(`Artefato gerado: ${m.artifact.path}`));
+        // sem mensagens de sistema no chat
       }
       if (m.type === 'workflow.run.output' && m.output) {
-        const out = String(m.output).replace(/\s+/g, ' ').slice(0, 220);
-        add(systemLine(`Saída: ${out}`));
+        // sem mensagens de sistema no chat
       }
       if (m.type === 'workflow.run.error') {
         processing = false;
         pendingQuestionId = null;
-        add(`{red-fg}Erro — ${m.error}{/red-fg}`);
+        add(`{red-fg}Aconteceu um erro nesta etapa. Vamos ajustar e tentar de novo.{/red-fg}`);
       }
       if (m.type === 'workflow.run.completed') {
         processing = false;
         pendingQuestionId = null;
         const step = GUIDED_FLOW.find((x) => x.workflowId === m.workflowId);
-        if (step) guidedCompletedPhases.add(step.phase);
-        add(`{green-fg}Etapa concluída — ${m.workflowId}{/green-fg}`);
+        if (step) {
+          guidedCompletedPhases.add(step.phase);
+          add(agentLine(step.persona, `concluí ${step.label}.`));
+        }
 
         const next = nextAfterWorkflow(String(m.workflowId ?? ''));
         if (next) {
-          add(systemLine(`Passando para ${firstName(next.persona)} (${next.label}).`));
+          add(agentLine(next.persona, `recebi o contexto e vou assumir ${next.label}.`));
         } else {
-          add('{green-fg}Jornada finalizada.{/green-fg}');
+          add('{green-fg}Parabéns! Finalizamos a jornada guided.{/green-fg}');
         }
         void refreshData();
       }
@@ -322,7 +325,9 @@ screen.key(['enter'], () => {
     screenMode = homeSelected === 0 ? 'guided' : 'expert';
     if (screenMode === 'guided') {
       guidedCompletedPhases = new Set<string>();
-      add(agentLine('Mary — Business Analyst', 'me conta sua ideia e o problema que você quer resolver.'));
+      add(agentLine('Mary — Business Analyst', 'oi! Eu vou conduzir a descoberta inicial do seu projeto.'));
+      add(agentLine('Mary — Business Analyst', 'vou começar entendendo sua ideia, problema e contexto de negócio.'));
+      add(agentLine('Mary — Business Analyst', 'me conta sua ideia e o principal problema que você quer resolver.'));
       pendingQuestionId = 'local:idea';
     }
     renderAll();
