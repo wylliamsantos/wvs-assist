@@ -66,10 +66,9 @@ const add = (line: string) => {
 const setSys = (line: string) => { sys.setContent(`⚙ ${line}`); };
 
 function firstName(persona: string) { return persona.split('—')[0]?.trim() || persona; }
-function avatar(persona: string) {
-  const female = ['mary', 'sally', 'amelia', 'paige'].includes(firstName(persona).toLowerCase());
-  return female ? '👩' : '👨';
-}
+function agentLine(persona: string, text: string) { return `{cyan-fg}${firstName(persona)} — ${text}{/cyan-fg}`; }
+function userLine(text: string) { return `{green-fg}Você — ${text}{/green-fg}`; }
+function systemLine(text: string) { return `{gray-fg}Sistema — ${text}{/gray-fg}`; }
 
 function nextStep() {
   for (const s of GUIDED_FLOW) {
@@ -141,7 +140,7 @@ function renderMain() {
     main.setContent([
       ...expertCards.map((c, i) => `${i === expertSelected ? '➤' : ' '} ${c.personaName} (${c.phase})`),
       '',
-      sel ? `${avatar(sel.personaName)} ${firstName(sel.personaName)}: ${sel.summary}` : '',
+      sel ? agentLine(sel.personaName, sel.summary) : '',
       '',
       ...convoBlock(10)
     ].join('\n'));
@@ -153,7 +152,7 @@ function renderMain() {
   const step = nextStep();
   main.setLabel(' Guided ');
   main.setContent([
-    step ? `${avatar(step.persona)} ${firstName(step.persona)} • ${step.label}` : '✅ Jornada concluída',
+    step ? `{bold}${firstName(step.persona)} — ${step.label}{/bold}` : '{green-fg}Jornada concluída{/green-fg}',
     processing ? 'Agente processando... aguarde' : 'Pressione Enter para avançar etapa',
     '',
     ...convoBlock(14)
@@ -209,7 +208,7 @@ function sendRun(workflowId: string, mode: Mode) {
     runMode: mode,
     input: contextualInput
   }));
-  add(`⚙️ Execução iniciada: ${workflowId}`);
+  add(systemLine(`Execução iniciada: ${workflowId}`));
   renderAll();
 }
 
@@ -223,38 +222,38 @@ function connect() {
       const m = JSON.parse(String(ev.data));
       if (m.type === 'workflow.run.started') {
         const step = GUIDED_FLOW.find((x) => x.workflowId === m.workflowId);
-        if (step && m.runMode === 'guided') add(`${avatar(step.persona)} ${firstName(step.persona)}: vamos começar ${step.label}.`);
+        if (step && m.runMode === 'guided') add(agentLine(step.persona, `vamos começar ${step.label}.`));
       }
       if (m.type === 'workflow.question') {
         pendingQuestionId = m.questionId;
         const step = GUIDED_FLOW.find((x) => x.workflowId === processingLabel);
-        const who = step ? `${avatar(step.persona)} ${firstName(step.persona)}` : '🤖 Agente';
-        add(`${who}: ${m.prompt}`);
+        const who = step ? step.persona : 'Agente';
+        add(agentLine(who, m.prompt));
       }
       if (m.type === 'workflow.artifact' && m.artifact?.path) {
-        add(`📄 Artefato gerado: ${m.artifact.path}`);
+        add(systemLine(`Artefato gerado: ${m.artifact.path}`));
       }
       if (m.type === 'workflow.run.output' && m.output) {
         const out = String(m.output).replace(/\s+/g, ' ').slice(0, 220);
-        add(`📝 Saída: ${out}`);
+        add(systemLine(`Saída: ${out}`));
       }
       if (m.type === 'workflow.run.error') {
         processing = false;
         pendingQuestionId = null;
-        add(`⚙️ Erro: ${m.error}`);
+        add(`{red-fg}Erro — ${m.error}{/red-fg}`);
       }
       if (m.type === 'workflow.run.completed') {
         processing = false;
         pendingQuestionId = null;
         const step = GUIDED_FLOW.find((x) => x.workflowId === m.workflowId);
         if (step) guidedCompletedPhases.add(step.phase);
-        add(`✅ Etapa concluída: ${m.workflowId}`);
+        add(`{green-fg}Etapa concluída — ${m.workflowId}{/green-fg}`);
 
         const next = nextAfterWorkflow(String(m.workflowId ?? ''));
         if (next) {
-          add(`➡️ Passando para ${firstName(next.persona)} (${next.label}).`);
+          add(systemLine(`Passando para ${firstName(next.persona)} (${next.label}).`));
         } else {
-          add('🏁 Jornada finalizada.');
+          add('{green-fg}Jornada finalizada.{/green-fg}');
         }
         void refreshData();
       }
@@ -276,7 +275,7 @@ input.on('submit', (v) => {
     return;
   }
 
-  add(`🧑 Você: ${answer}`);
+  add(userLine(answer));
 
   if (pendingQuestionId === 'local:idea') {
     pendingQuestionId = null;
@@ -323,7 +322,7 @@ screen.key(['enter'], () => {
     screenMode = homeSelected === 0 ? 'guided' : 'expert';
     if (screenMode === 'guided') {
       guidedCompletedPhases = new Set<string>();
-      add(`${avatar('Mary — Business Analyst')} Mary: me conta sua ideia e o problema que você quer resolver.`);
+      add(agentLine('Mary — Business Analyst', 'me conta sua ideia e o problema que você quer resolver.'));
       pendingQuestionId = 'local:idea';
     }
     renderAll();
