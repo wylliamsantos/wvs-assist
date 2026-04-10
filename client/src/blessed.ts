@@ -11,6 +11,7 @@ type ExpertCard = { personaName: string; phase: string; workflowId: string; summ
 
 const API_BASE = process.env.BMAD_API_URL || 'http://127.0.0.1:4000';
 const ACCESS_TOKEN = process.env.BMAD_ACCESS_TOKEN || 'demo-access-token';
+const USE_EMOJI = process.env.WVS_EMOJI === '1';
 
 const GUIDED_FLOW = [
   { phase: 'analysis', persona: 'Mary — Business Analyst', workflowId: 'analysis.problem-tree', label: 'Descoberta da Ideia' },
@@ -61,7 +62,11 @@ const add = (line: string) => { lines.push(line); if (lines.length > 120) lines 
 const setSys = (line: string) => { sys.setContent(`⚙ ${line}`); };
 
 function firstName(persona: string) { return persona.split('—')[0]?.trim() || persona; }
-function avatar(persona: string) { return ['mary', 'sally', 'amelia', 'paige'].includes(firstName(persona).toLowerCase()) ? '👩' : '👨'; }
+function avatar(persona: string) {
+  const female = ['mary', 'sally', 'amelia', 'paige'].includes(firstName(persona).toLowerCase());
+  if (USE_EMOJI) return female ? '👩' : '👨';
+  return female ? '[F]' : '[M]';
+}
 
 function nextStep() {
   for (const s of GUIDED_FLOW) {
@@ -130,6 +135,7 @@ function renderMain() {
     inputHint.setContent('Responda e pressione Enter');
     input.show();
     input.focus();
+    input.readInput();
   } else {
     inputHint.setContent('Enter avança etapa | h home');
     input.hide();
@@ -242,7 +248,7 @@ screen.key(['enter'], () => {
 
   if (screenMode === 'home') {
     screenMode = homeSelected === 0 ? 'guided' : 'expert';
-    if (screenMode === 'guided') add('👩 Mary: me conta sua ideia e o problema que você quer resolver.');
+    if (screenMode === 'guided') add(`${avatar('Mary — Business Analyst')} Mary: me conta sua ideia e o problema que você quer resolver.`);
     renderAll();
     return;
   }
