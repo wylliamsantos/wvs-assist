@@ -334,6 +334,14 @@ const server = Bun.serve({
 console.log(`BMAD MCP stub listening on http://localhost:${PORT}`);
 
 const MAX_ADAPTIVE_QUESTIONS = 3;
+const MIN_GUIDED_QUESTIONS_BY_PHASE: Record<string, number> = {
+  analysis: 3,
+  planning: 2,
+  solutioning: 2,
+  implementation: 2,
+  testing: 2,
+  documentation: 2
+};
 
 async function handleWorkflowRun(ws: ServerWebSocket<any>, payload: any) {
   const workflowId = payload.workflowId ?? payload.id;
@@ -427,6 +435,16 @@ async function handleWorkflowRun(ws: ServerWebSocket<any>, payload: any) {
 
     if (playbook.phase === "analysis") {
       await runAdaptiveQuestions(ws, {
+        runId,
+        workflowId,
+        sessionId,
+        playbook,
+        qnaContext
+      });
+    }
+
+    if (runMode === 'guided') {
+      await ensureMinimumGuidedQuestions(ws, {
         runId,
         workflowId,
         sessionId,
@@ -565,6 +583,40 @@ async function runAdaptiveQuestions(
       reason: followup.reason
     });
     if (!asked || !followup.allowMore) break;
+  }
+}
+
+async function ensureMinimumGuidedQuestions(
+  ws: ServerWebSocket<any>,
+  {
+    runId,
+    workflowId,
+    sessionId,
+    playbook,
+    qnaContext
+  }: { runId: string; workflowId: string; sessionId: string; playbook: Playbook; qnaContext: { prompt: string; answer: string }[] }
+) {
+  const minQuestions = MIN_GUIDED_QUESTIONS_BY_PHASE[playbook.phase] ?? 2;
+  if (qnaContext.length >= minQuestions) return;
+
+  const remaining = Math.max(0, minQuestions - qnaContext.length);
+  for (let index = 0; index < remaining; index++) {
+    const followup = await generateFollowupQuestion(playbook, qnaContext);
+    const prompt = followup?.ask && followup.question
+      ? followup.question
+      : `Antes de concluir esta etapa (${playbook.phase}), qual detalhe essencial ainda falta para garantir qualidade no próximo passo?`;
+
+    const asked = await askFollowupQuestion(ws, {
+      runId,
+      workflowId,
+      sessionId,
+      prompt,
+      qnaContext,
+      suffix: `min-depth:${index}`,
+      questionKind: "adaptive",
+      reason: followup?.reason ?? "minimum_guided_depth"
+    });
+    if (!asked) break;
   }
 }
 
