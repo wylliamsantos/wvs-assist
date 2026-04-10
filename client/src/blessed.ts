@@ -146,8 +146,15 @@ function renderMain() {
       '',
       ...convoBlock(10)
     ].join('\n'));
-    inputHint.setContent(processing ? 'Aguarde o agente concluir...' : '↑/↓ escolhe | Enter executa | h home');
-    input.hide();
+
+    if (pendingQuestionId) {
+      inputHint.setContent('{green-fg}Sua resposta é necessária — digite e pressione Enter{/green-fg}');
+      input.show();
+      input.focus();
+    } else {
+      inputHint.setContent(processing ? '{yellow-fg}Aguarde — agente processando...{/yellow-fg}' : '↑/↓ escolhe | Enter executa | h home');
+      input.hide();
+    }
     return;
   }
 
