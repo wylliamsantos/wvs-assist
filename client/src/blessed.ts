@@ -164,7 +164,6 @@ function renderMain() {
     inputHint.setContent('{green-fg}Sua resposta é necessária — digite e pressione Enter{/green-fg}');
     input.show();
     input.focus();
-    input.readInput();
   } else if (processing) {
     inputHint.setContent('{yellow-fg}Aguarde — o agente está preparando a próxima interação{/yellow-fg}');
     input.hide();
