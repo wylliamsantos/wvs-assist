@@ -11,7 +11,6 @@ type ExpertCard = { personaName: string; phase: string; workflowId: string; summ
 
 const API_BASE = process.env.BMAD_API_URL || 'http://127.0.0.1:4000';
 const ACCESS_TOKEN = process.env.BMAD_ACCESS_TOKEN || 'demo-access-token';
-const USE_EMOJI = process.env.WVS_EMOJI !== '0';
 
 const GUIDED_FLOW = [
   { phase: 'analysis', persona: 'Mary — Business Analyst', workflowId: 'analysis.problem-tree', label: 'Descoberta da Ideia' },
@@ -69,8 +68,7 @@ const setSys = (line: string) => { sys.setContent(`⚙ ${line}`); };
 function firstName(persona: string) { return persona.split('—')[0]?.trim() || persona; }
 function avatar(persona: string) {
   const female = ['mary', 'sally', 'amelia', 'paige'].includes(firstName(persona).toLowerCase());
-  if (USE_EMOJI) return female ? '👩' : '👨';
-  return female ? '[F]' : '[M]';
+  return female ? '👩' : '👨';
 }
 
 function nextStep() {
@@ -278,7 +276,7 @@ input.on('submit', (v) => {
     return;
   }
 
-  add(`${USE_EMOJI ? '🧑' : '[U]'} Você: ${answer}`);
+  add(`🧑 Você: ${answer}`);
 
   if (pendingQuestionId === 'local:idea') {
     pendingQuestionId = null;
