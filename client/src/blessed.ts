@@ -11,7 +11,7 @@ type ExpertCard = { personaName: string; phase: string; workflowId: string; summ
 
 const API_BASE = process.env.BMAD_API_URL || 'http://127.0.0.1:4000';
 const ACCESS_TOKEN = process.env.BMAD_ACCESS_TOKEN || 'demo-access-token';
-const USE_EMOJI = process.env.WVS_EMOJI === '1';
+const USE_EMOJI = process.env.WVS_EMOJI !== '0';
 
 const GUIDED_FLOW = [
   { phase: 'analysis', persona: 'Mary — Business Analyst', workflowId: 'analysis.problem-tree', label: 'Descoberta da Ideia' },
